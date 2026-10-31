@@ -1,15 +1,17 @@
-"""KAMIS 토마토 일별 도매가격(최근 1년)을 받아 data/raw/에 CSV로 저장한다.
+"""KAMIS 토마토 일별 도매/소매 가격(기본: 최근 1년)을 받아 data/raw/에 CSV로 저장한다.
 
-API: periodWholesaleProductList (신)일별 품목별 도매 가격자료, 기간 최대 1년)
+API: periodWholesaleProductList (16번, 도매) / periodRetailProductList (17번, 소매). 기간 최대 1년.
 인증: .env의 KAMIS_API_KEY(p_cert_key), KAMIS_CERT_ID(p_cert_id). 키는 출력하지 않는다.
 
-사용법: python3 scripts/fetch_kamis_wholesale.py [--start YYYY-MM-DD] [--end YYYY-MM-DD]
+사용법: python3 scripts/fetch_kamis.py [--market wholesale|retail]
+        [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--dry-run]
 """
 import argparse
 import csv
 import datetime as dt
 import json
 import sys
+import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -20,6 +22,8 @@ URL = "https://www.kamis.or.kr/service/price/xml.do"
 # 코드표(productInfo) 기준: 채소류 / 토마토 / 품종 00 / 도매 5kg / 등급 04, 05
 ITEM = {"p_itemcategorycode": "200", "p_itemcode": "225", "p_kindcode": "00"}
 RANKS = ["04", "05"]
+ACTIONS = {"wholesale": "periodWholesaleProductList", "retail": "periodRetailProductList"}
+DELAY_SEC = 2  # 요청 사이 간격
 FIELDS = ["productrankcode", "itemname", "kindname", "countyname", "marketname", "yyyy", "regday", "price"]
 
 
@@ -49,6 +53,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--end", default=yesterday.isoformat())
     ap.add_argument("--start")
+    ap.add_argument("--market", choices=ACTIONS, default="wholesale")
+    ap.add_argument("--dry-run", action="store_true", help="행 수만 출력하고 저장하지 않음")
     args = ap.parse_args()
     end = dt.date.fromisoformat(args.end)
     start = dt.date.fromisoformat(args.start) if args.start else end - dt.timedelta(days=364)
@@ -59,9 +65,11 @@ def main():
         sys.exit(".env에 KAMIS_API_KEY와 KAMIS_CERT_ID가 모두 필요합니다.")
 
     rows = []
-    for rank in RANKS:
+    for i, rank in enumerate(RANKS):
+        if i:
+            time.sleep(DELAY_SEC)
         params = {
-            "action": "periodWholesaleProductList",
+            "action": ACTIONS[args.market],
             "p_cert_key": key,
             "p_cert_id": cert_id,
             "p_returntype": "json",
@@ -83,9 +91,14 @@ def main():
             items = [items]
         for it in items:
             rows.append({"productrankcode": rank, **{f: it.get(f, "") for f in FIELDS[1:]}})
-        print(f"등급 {rank}: {len(items)}행")
+        days = sorted({(it.get("yyyy", ""), it.get("regday", "")) for it in items if it.get("countyname") != "평년"})
+        span = f" ({'-'.join(days[0])} ~ {'-'.join(days[-1])})" if days else ""
+        print(f"등급 {rank}: {len(items)}행{span}")
 
-    out = ROOT / "data" / "raw" / f"kamis_wholesale_tomato_{start:%Y%m%d}_{end:%Y%m%d}.csv"
+    if args.dry_run:
+        return
+
+    out = ROOT / "data" / "raw" / f"kamis_{args.market}_tomato_{start:%Y%m%d}_{end:%Y%m%d}.csv"
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)

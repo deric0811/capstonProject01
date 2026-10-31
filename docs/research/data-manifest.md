@@ -1,0 +1,70 @@
+# Data Manifest
+
+`data/`는 git에서 제외한다. 원본은 `scripts/fetch_kamis.py`로 다시 받을 수 있고, 아래 sha256으로 동일한지 확인한다.
+
+생성: 2026-10-31. 기간은 파일 안 실제 데이터의 첫날~마지막날(`평년` 행 제외).
+
+| 파일 | 구분 | 실제 기간 | 행 수 | sha256 |
+|---|---|---|---|---|
+| `data/raw/kamis_retail_tomato_19951106_19961104.csv` | 소매 | 1996-03-13 ~ 1996-10-04 | 3920 | `ee02df2417c0c31d62b3f945e7d9b0fe758cfa59cf75127b4c1a58b43a9b5c2d` |
+| `data/raw/kamis_retail_tomato_19961105_19971104.csv` | 소매 | 1997-03-19 ~ 1997-10-15 | 4760 | `bfd3a3000ea578f047dc1e018b215f3cdac0d980cff686b132ed397795be01f8` |
+| `data/raw/kamis_retail_tomato_19971105_19981104.csv` | 소매 | 1997-12-23 ~ 1998-10-15 | 5559 | `a770d02c64e4ac61178e4244f9835fb686befe1598f912b01d3775e9a5479581` |
+| `data/raw/kamis_retail_tomato_19981105_19991104.csv` | 소매 | 1999-03-17 ~ 1999-11-03 | 4888 | `a4b4870fd3e2ba53066a42815f5c274e5aefa1466ad1437cdb97ae83f98cee82` |
+| `data/raw/kamis_retail_tomato_19991105_20001103.csv` | 소매 | 2000-03-02 ~ 2000-09-04 | 3624 | `e141f88f4fe8e98bbdb95abb7bfbf03e9e81ad97133b137ee8a51af5782b86c5` |
+| `data/raw/kamis_retail_tomato_20001104_20011103.csv` | 소매 | 2001-03-21 ~ 2001-10-15 | 3740 | `8a255d9202ca6665c1ae2920a8ff42b11d1a5a7a9a5c08dad7191b815a76a626` |
+| `data/raw/kamis_retail_tomato_20011104_20021103.csv` | 소매 | 2002-04-11 ~ 2002-11-02 | 4676 | `ab6a05e97b39ccd70d7b5b8ad20c650c8715ae4840c6a2d6beead0b4ba9c10ad` |
+| `data/raw/kamis_retail_tomato_20021104_20031103.csv` | 소매 | 2002-11-04 ~ 2003-11-03 | 10098 | `3cf7778e4cc6aa091102ef7a4893c4e173dfccb1ee6cb7deaf9afbdaebd4c5b5` |
+| `data/raw/kamis_retail_tomato_20031104_20041102.csv` | 소매 | 2003-11-04 ~ 2004-11-02 | 9056 | `456868df8d0e76f78226f0ef9c3ad60616a8e08ca6b883d08a9085615266ee64` |
+| `data/raw/kamis_retail_tomato_20041103_20051102.csv` | 소매 | 2004-11-03 ~ 2005-11-02 | 9945 | `b026f6e8719b25ea9029264543b215977ae83678fcac1edc10fbada227e8c9c4` |
+| `data/raw/kamis_retail_tomato_20051103_20061102.csv` | 소매 | 2005-11-03 ~ 2006-11-02 | 8602 | `2710c1267797fdeb5de478d53f67d27754f59ff1abb60764a1fa5cd6d801464c` |
+| `data/raw/kamis_retail_tomato_20061103_20071102.csv` | 소매 | 2006-11-03 ~ 2007-11-02 | 8645 | `95a3d63e5ecd9df6a4a84b67efe3c86b49f4749556b63ef65e7688c3abc11f05` |
+| `data/raw/kamis_retail_tomato_20071103_20081101.csv` | 소매 | 2007-11-05 ~ 2008-10-31 | 9102 | `4a8d27c81c91d2c753b44f0103d24bc59161f1d16b8e70db9bfbc2e6a31c2f6b` |
+| `data/raw/kamis_retail_tomato_20081102_20091101.csv` | 소매 | 2008-11-03 ~ 2009-10-30 | 9828 | `d2233d4ec28c442a56ddd7d7b2ff0145240bd6e37b7fc3c3f6681de6e6665ade` |
+| `data/raw/kamis_retail_tomato_20091102_20101101.csv` | 소매 | 2009-11-02 ~ 2010-11-01 | 10500 | `86d1a6112480beca36aee82f57acb5aebcb7daccd5128d363af31e5dc1b404a9` |
+| `data/raw/kamis_retail_tomato_20101102_20111101.csv` | 소매 | 2010-11-02 ~ 2011-11-01 | 11250 | `2bbc08c36b6188f7048663eb1a4efebcd80728e0189b20ffda6e878c9dc8f8af` |
+| `data/raw/kamis_retail_tomato_20111102_20121031.csv` | 소매 | 2011-11-02 ~ 2012-10-31 | 15500 | `9de7ec2a78621f55d6a21fe75533d06dca86aca6bf3dffa27ce22818c981da9c` |
+| `data/raw/kamis_retail_tomato_20121101_20131031.csv` | 소매 | 2012-11-01 ~ 2013-10-31 | 14326 | `4ba8dce9a23beda9dc822b4f0b451e3b72c57661557eaf065dd19345d10d891f` |
+| `data/raw/kamis_retail_tomato_20131101_20141031.csv` | 소매 | 2013-11-01 ~ 2014-10-31 | 15128 | `dfd288833fab17f7e22ec59ec175e9bbf1382f00c6ee22c2948fac0de02aab0c` |
+| `data/raw/kamis_retail_tomato_20141101_20151031.csv` | 소매 | 2014-11-03 ~ 2015-10-30 | 16549 | `db04af245506197b0e1ec78b9c938707e6cbb597f4bb1d87ae9dd4b2fd31f272` |
+| `data/raw/kamis_retail_tomato_20151101_20161030.csv` | 소매 | 2015-11-02 ~ 2016-10-28 | 14640 | `fde7ec21f351195acb8bf3da9f02286c891dfe71440e157070658ac09e7f9fa6` |
+| `data/raw/kamis_retail_tomato_20161031_20171030.csv` | 소매 | 2016-10-31 ~ 2017-10-30 | 16660 | `5e1fd32ec6b442774c3d440aa49c1f98606ead4d2c3d33aa7626fd880d5bccd5` |
+| `data/raw/kamis_retail_tomato_20171031_20181030.csv` | 소매 | 2017-10-31 ~ 2018-10-30 | 16836 | `56f6e6282c30ce67fa63e597ebe65d453d98c861b5b0118525cd0a13dbb3333f` |
+| `data/raw/kamis_retail_tomato_20181031_20191030.csv` | 소매 | 2018-10-31 ~ 2019-10-30 | 15990 | `4a3445923b7c5246fa29ee8192661c887753eb916cef36852d9192e7985b9733` |
+| `data/raw/kamis_retail_tomato_20191031_20201029.csv` | 소매 | 2019-10-31 ~ 2020-10-29 | 14131 | `a14a59f540b3711400aa924ab61f2f72a1c029234119742da7aef2add2b03706` |
+| `data/raw/kamis_retail_tomato_20201030_20211029.csv` | 소매 | 2020-10-30 ~ 2021-10-29 | 12852 | `46678d9c5cc73ead73aac961a5523ec7d1e7840a9e0cc2570372e8329eb8d064` |
+| `data/raw/kamis_retail_tomato_20211030_20221029.csv` | 소매 | 2021-11-01 ~ 2022-10-28 | 12300 | `b3bc6541dcb4ebfaedb751d1f1d44bac91b64d1c755f7dc8b9271fd54496d9e1` |
+| `data/raw/kamis_retail_tomato_20221030_20231029.csv` | 소매 | 2022-10-31 ~ 2023-10-27 | 14820 | `d85ef43e0ba2b1189c680030e10b43447719c10fc0ef62f05b43fae1144da453` |
+| `data/raw/kamis_retail_tomato_20231030_20241028.csv` | 소매 | 2023-10-30 ~ 2024-10-28 | 12636 | `d233b8e3a3fc0764a1291cec2afdac564c533db7d3130803d6a702b7daad098f` |
+| `data/raw/kamis_retail_tomato_20241029_20251028.csv` | 소매 | 2024-10-29 ~ 2025-10-28 | 12584 | `ecef6ae6cd3655e02622c186978e425a79c7edace2ab5edebaea88709836a3b8` |
+| `data/raw/kamis_retail_tomato_20251029_20261028.csv` | 소매 | 2025-10-29 ~ 2026-10-28 | 14884 | `173131d3ff7c37ad997487cfef8bc54728492276b24f8054291a731d2a2e0c46` |
+| `data/raw/kamis_wholesale_tomato_19951106_19961104.csv` | 도매 | 1996-03-13 ~ 1996-10-02 | 4448 | `87be4ee59481d5d76fa82747ed1d3270fe658c28bd9935ae85777655df360882` |
+| `data/raw/kamis_wholesale_tomato_19961105_19971104.csv` | 도매 | 1997-03-19 ~ 1997-10-15 | 5440 | `237689f1921050193545adf3eb2cff2ecbc0713d4d567ed94684cc6c2b6e58b9` |
+| `data/raw/kamis_wholesale_tomato_19971105_19981104.csv` | 도매 | 1998-03-26 ~ 1998-10-15 | 5216 | `3296f0e110b3bbddb4b28dd4c61d15681c0c8baf544efb901a709c20e3ae6595` |
+| `data/raw/kamis_wholesale_tomato_19981105_19991104.csv` | 도매 | 1999-03-17 ~ 1999-11-03 | 2632 | `51ae176fa59e6b692ad2df63cfcbe88d1c0c96ff62a5d781d19239be13fd3fd0` |
+| `data/raw/kamis_wholesale_tomato_19991105_20001103.csv` | 도매 | 2000-03-02 ~ 2000-09-04 | 2114 | `97e25eab91c9898bf6163d455a637835f6519ffc6a7afa34b43a0ea8f0a8d9a1` |
+| `data/raw/kamis_wholesale_tomato_20001104_20011103.csv` | 도매 | 2001-03-21 ~ 2001-10-15 | 2380 | `e4fe90c52d7e3af0554a1ce78e76881d51bf267ba9a79be86f05148fcb5e6553` |
+| `data/raw/kamis_wholesale_tomato_20011104_20021103.csv` | 도매 | 2002-04-11 ~ 2002-11-02 | 2338 | `71bdfc7d744d9ee83b5aa9912c1e1fb69dcf4087386885ff3abc79f64a4fbd94` |
+| `data/raw/kamis_wholesale_tomato_20021104_20031103.csv` | 도매 | 2002-11-04 ~ 2003-11-03 | 4158 | `9281762af77b93bff234ab23c20f17a059a38f6e08aa360bf69e256c6e5e0dae` |
+| `data/raw/kamis_wholesale_tomato_20031104_20041102.csv` | 도매 | 2003-11-04 ~ 2004-11-02 | 3962 | `3278ed554e3700fef9ea35da4a02b74844d63ebef1055c28c3f21bec2b613a8f` |
+| `data/raw/kamis_wholesale_tomato_20041103_20051102.csv` | 도매 | 2004-11-03 ~ 2005-11-02 | 3570 | `04c487601b43cacc0df4f5a795aa9be68f91bbf5b8dc7f2b2606bec43bb9ed25` |
+| `data/raw/kamis_wholesale_tomato_20051103_20061102.csv` | 도매 | 2005-11-03 ~ 2006-11-02 | 3542 | `8b8a127e9f116b910931e3ac00ea431abb27d76945147cfd15a87c86e59b0085` |
+| `data/raw/kamis_wholesale_tomato_20061103_20071102.csv` | 도매 | 2006-11-03 ~ 2007-11-02 | 3458 | `a6919e606a3e08f8c3ba23b35f904afa34d121f1b87833456fcc2c47f089bf15` |
+| `data/raw/kamis_wholesale_tomato_20071103_20081101.csv` | 도매 | 2007-11-05 ~ 2008-10-31 | 3444 | `63ffd5040a96c8bccb26ed201afe9750c9c7fb3b192e01dd888c5d7d39d1dbf9` |
+| `data/raw/kamis_wholesale_tomato_20081102_20091101.csv` | 도매 | 2008-11-03 ~ 2009-10-30 | 3528 | `d28a73774e04a6491e7e84de13c37082c99c4b3d83ff3ccbae3c0914e1cd63ed` |
+| `data/raw/kamis_wholesale_tomato_20091102_20101101.csv` | 도매 | 2009-11-02 ~ 2010-11-01 | 3500 | `9262c509d323335d63ebc0e232fbb0f6d52c6d1b99b8cdd57378f7afa4caac7d` |
+| `data/raw/kamis_wholesale_tomato_20101102_20111101.csv` | 도매 | 2010-11-02 ~ 2011-11-01 | 3500 | `71c11831e880580c457d1a45ce6bbb31c3c9c05213517665e4cb6bac9f27bd12` |
+| `data/raw/kamis_wholesale_tomato_20111102_20121031.csv` | 도매 | 2011-11-02 ~ 2012-10-31 | 3500 | `0ab1210b2f83ccc23bb1a1bc9a268b49bac4494d8a67278d0577ae121081584e` |
+| `data/raw/kamis_wholesale_tomato_20121101_20131031.csv` | 도매 | 2012-11-01 ~ 2013-10-31 | 3458 | `4234c55537dd6f9ab588466b974ca399c3fa7843664ed99595e437b900f9a6cd` |
+| `data/raw/kamis_wholesale_tomato_20131101_20141031.csv` | 도매 | 2013-11-01 ~ 2014-10-31 | 3416 | `ff2f24eec1a51f13bca54e56643710ac839f99ef66e591f21d92a83e9726c422` |
+| `data/raw/kamis_wholesale_tomato_20141101_20151031.csv` | 도매 | 2014-11-03 ~ 2015-10-30 | 3458 | `42bc330782d13bf6f2cdf43e886bbaf48e8c2c5ddbc507f7e4423cc918088b29` |
+| `data/raw/kamis_wholesale_tomato_20151101_20161030.csv` | 도매 | 2015-11-02 ~ 2016-10-28 | 3416 | `57d47abf034f9199bdd1d5ad4f1afe7e351f8c3a2e901247f711a2034a4c3c5c` |
+| `data/raw/kamis_wholesale_tomato_20161031_20171030.csv` | 도매 | 2016-10-31 ~ 2017-10-30 | 3430 | `c64a260b0b9cd64812569d69385a1b3cecbe98774aa42d1571ae40ae12d1c5f5` |
+| `data/raw/kamis_wholesale_tomato_20171031_20181030.csv` | 도매 | 2017-10-31 ~ 2018-10-30 | 3416 | `ee317718b26c03ef399e47c5138ad952e1db5a2ad0f8fc09d316678c5450d60f` |
+| `data/raw/kamis_wholesale_tomato_20181031_20191030.csv` | 도매 | 2018-10-31 ~ 2019-10-30 | 3444 | `fbcf03344782b5685336fa6803d42de15c666584996e64158c7b11e217489bbc` |
+| `data/raw/kamis_wholesale_tomato_20191031_20201029.csv` | 도매 | 2019-10-31 ~ 2020-10-29 | 3952 | `9ebcb8bd72d2587a8eea85e4987f55be7de492acc9fde5e9309ac57c2b35d0eb` |
+| `data/raw/kamis_wholesale_tomato_20201030_20211029.csv` | 도매 | 2020-10-30 ~ 2021-10-29 | 3458 | `7cf6fd42b3ac558541d02c70a07909d5c5917e3fe1ee2c8fd5766f4e2148c598` |
+| `data/raw/kamis_wholesale_tomato_20211030_20221029.csv` | 도매 | 2021-11-01 ~ 2022-10-28 | 3444 | `45c0020b988ebd8332ab533ab78e741635442cfe87e2685f2879d65dd94de7a0` |
+| `data/raw/kamis_wholesale_tomato_20221030_20231029.csv` | 도매 | 2022-10-31 ~ 2023-10-27 | 3458 | `63fffc9974e2235b02b04b417de8725c0263341b1bd859b4ca38bf2789a0710f` |
+| `data/raw/kamis_wholesale_tomato_20231030_20241028.csv` | 도매 | 2023-10-30 ~ 2024-10-28 | 3402 | `a1e760a5de3eab8bf495941cf9e8ac74c94056f7b472b6764f640a9d10dfebbf` |
+| `data/raw/kamis_wholesale_tomato_20241029_20251028.csv` | 도매 | 2024-10-29 ~ 2025-10-28 | 3872 | `a0e2939d72cf3486383384a6f13320159b64a41b500a4546e9fb8c64b40c3530` |
+| `data/raw/kamis_wholesale_tomato_20251029_20261028.csv` | 도매 | 2025-10-29 ~ 2026-10-28 | 3416 | `c9d71416ac8e78ad00ae7f0ca5c9785c690d3dc19bbaba0bbd982971e0568f00` |
