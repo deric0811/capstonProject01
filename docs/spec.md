@@ -215,7 +215,7 @@ src/tomato/
 tests/                 # metrics, calendar, feature 누수 검사부터
 docker-compose.yml, Dockerfile
 ```
-- 의존성 관리 도구(pip+requirements, uv 등): [미정]
+- 의존성 관리: uv (`pyproject.toml` + `uv.lock`). docs/decisions.md 2026-11-01
 - Chronos-2는 Colab에서 돌리고, 결과 파일(예측 CSV)을 `backtest import`로 DB에 넣는다 (intent Constraints).
 
 ## 9. CLI 명령
@@ -274,6 +274,5 @@ docker-compose.yml, Dockerfile
 | LLM 제공자·모델명 | 소형 모델, `llm.py`에 격리 |
 | LLM 월 비용 상한 | 사용자가 정할 값 |
 | 뉴스 출처 | MVP 이후 |
-| 의존성 관리 도구 | 구현 1단계 시작 전 |
 | Chronos-2 CPU 실행 가능 여부 | 구현 4단계에서 확인 |
 | KAMIS 실제 공표 시각 | 운영하면서 관찰해 기록 (비차단) |

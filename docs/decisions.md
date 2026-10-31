@@ -18,3 +18,8 @@
 - 결정: PostgreSQL
 - 대안: MySQL(계획서 초기안)
 - 이유: 이 프로젝트에서는 DB 선택이 결과에 미치는 영향이 작아, 하나로 정하고 넘어간다.
+
+## 2026-11-01: 의존성 관리 도구 uv
+- 결정: uv (`pyproject.toml` + `uv.lock`)
+- 대안: pip + requirements.txt
+- 이유: 사용자 결정. lock 파일로 로컬과 Docker 이미지의 의존성 버전을 같게 맞출 수 있다.
