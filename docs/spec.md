@@ -19,7 +19,7 @@ Status: accepted · Date: 2026-11-01 · 근거: `intent/intent.md`(accepted v3.1
 | 수집 시각 | 매일 20시. `collect daily`가 최근 7일을 다시 받으므로 공표가 늦어도 다음 수집에서 채워진다(공표 시각 때문에 막히지 않음). 실제 공표 시각은 운영하면서 관찰해 기록한다 |
 | 대시보드 날짜 | "3거래일 후 (예상 날짜 YYYY-MM-DD)"로 실제 날짜를 함께 표시 |
 | 예상 날짜 계산 | 평일 중 공휴일을 뺀 날을 거래일로 추정. 과거 데이터에 토요일 거래가 92일, 일요일 거래가 2일 있으므로 추정이 틀릴 수 있다는 점을 화면에 명시 |
-| 공휴일 목록 | 공공데이터포털 특일 정보 API |
+| 공휴일 목록 | Python `holidays` 라이브러리(KR). 대체·임시공휴일이 빠질 수 있다 (docs/decisions.md 2026-11-01) |
 
 ## 2. 평가 지표
 
@@ -70,6 +70,8 @@ Status: accepted · Date: 2026-11-01 · 근거: `intent/intent.md`(accepted v3.1
 - **다음 실험 후보** (이번 범위 제외)
   - TabPFN (회귀, LightGBM과 같은 feature)
   - B3 계절 기준선: ŷ(t+3) = y(t) × 전년 같은 시기 3거래일 변화율
+  - 요인 그룹 추가 실험: 가격만 → +반입량 → +기상(주산지 관측소), 같은 walk-forward로 비교. 반입량 출처·주산지는 `docs/research/data-sources.md`에서 조사 후 결정
+  - Chronos-2 fine-tuning(Colab A100) vs zero-shot 비교. 4단계 이후 시간이 남으면
 
 **Feature**: 모두 t 시점까지의 정보만 쓴다.
 
@@ -204,7 +206,7 @@ src/tomato/
   config.py            # .env 로드 (키 출력 금지)
   collectors/kamis.py  # scripts/fetch_kamis.py를 옮긴 것. 재시도·ingest_run 기록
   db/schema.sql, db/repo.py
-  calendar.py          # 공휴일 달력(특일 API), 거래일 계산, t+3 예상 날짜
+  calendar.py          # 공휴일 달력(holidays KR), 거래일 계산, t+3 예상 날짜
   features.py          # §4 feature (t 시점까지만)
   models/baselines.py, models/lgbm.py, models/chronos.py
   evaluation/walkforward.py, evaluation/metrics.py

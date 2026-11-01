@@ -23,3 +23,9 @@
 - 결정: uv (`pyproject.toml` + `uv.lock`)
 - 대안: pip + requirements.txt
 - 이유: 사용자 결정. lock 파일로 로컬과 Docker 이미지의 의존성 버전을 같게 맞출 수 있다.
+
+## 2026-11-01: 공휴일 목록 Python holidays 라이브러리(KR)
+- 결정: Python `holidays` 라이브러리의 KR 달력으로 거래일을 추정한다. DB 테이블과 동기화 명령은 만들지 않는다.
+- 대안: 공공데이터포털 특일 정보 API (spec 초안)
+- 이유: API 키가 필요 없고, 외부 API 의존이 줄어든다.
+- 한계: 대체공휴일·임시공휴일이 빠질 수 있다. 빠진 날은 예상 날짜가 하루 이상 틀릴 수 있다.
