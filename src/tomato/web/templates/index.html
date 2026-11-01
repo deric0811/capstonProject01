@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>토마토 도매가 예측</title>
+<style>
+  :root { --fg:#1f2328; --muted:#59636e; --line:#d1d9e0; --bg:#fff; --card:#f6f8fa; --actual:#c0392b; --pred:#1f6feb; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.6 system-ui, "Noto Sans KR", sans-serif; color:var(--fg); background:var(--bg); }
+  main { max-width:960px; margin:0 auto; padding:24px 16px 40px; }
+  h1 { font-size:1.35rem; margin:0 0 4px; }
+  .sub { color:var(--muted); margin:0 0 20px; font-size:.9rem; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-bottom:20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px 16px; }
+  .card .label { color:var(--muted); font-size:.85rem; }
+  .card .value { font-size:1.6rem; font-weight:650; font-variant-numeric:tabular-nums; }
+  .card .meta { color:var(--muted); font-size:.85rem; }
+  .chart { position:relative; height:320px; margin-bottom:20px; }
+  section { margin-bottom:16px; }
+  h2 { font-size:1rem; margin:0 0 6px; }
+  .note { color:var(--muted); font-size:.85rem; }
+  .empty { padding:24px; border:1px dashed var(--line); border-radius:8px; color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>토마토 도매가 3거래일 후 예측</h1>
+  <p class="sub">KAMIS 공표 도매 평균가 · 토마토 상품 · 5kg</p>
+
+  {% if f %}
+  <div class="cards">
+    <div class="card" id="current">
+      <div class="label">현재 공표가</div>
+      <div class="value">{{ "{:,}".format(f.y_origin) }}원</div>
+      <div class="meta">{{ f.origin_date }} 기준</div>
+    </div>
+    <div class="card" id="forecast">
+      <div class="label">{{ f.horizon_tdays }}거래일 후 예상가</div>
+      <div class="value">{{ "{:,}".format(f.y_hat) }}원</div>
+      <div class="meta">예상 날짜 {{ f.target_date_est }} · 현재 대비 {{ "%+.1f" | format(f.change_pct) }}%</div>
+    </div>
+  </div>
+
+  <div class="chart"><canvas id="price-chart" aria-label="최근 가격과 예측점"></canvas></div>
+
+  <section id="explanation">
+    <h2>설명</h2>
+    <p>{{ f.explanation.text if f.explanation else "아직 설명이 없습니다 (tomato explain 실행 필요)." }}</p>
+  </section>
+
+  <section id="performance">
+    <h2>모델 성능</h2>
+    {% set p = f.performance %}
+    {% if p and p.mae %}
+      {% if f.model == "B1" %}
+      <p>직전가(B1) 방식의 2023년 이후 {{ f.horizon_tdays }}거래일 후 평균 오차 {{ "{:,}".format(p.mae.value | round | int) }}원
+        (MAPE {{ "%.1f" | format(p.mape.value) }}%, 예측 {{ "{:,}".format(p.mae.n) }}회). 비교할 후보 모델은 아직 없습니다.</p>
+      {% else %}
+      <p>직전가 대비 오차 {{ "%.1f" | format((1 - p.rel_mae.value) * 100) }}% 감소
+        (평균 오차 {{ "{:,}".format(p.mae.value | round | int) }}원, 2023년 이후).</p>
+      {% endif %}
+    {% else %}
+      <p>성능 지표 없음 (tomato backtest 실행 필요).</p>
+    {% endif %}
+  </section>
+
+  <p class="note">모델: {{ f.model }}. 예상 날짜는 평일 중 공휴일(holidays KR)을 뺀 날로 추정한 것입니다.
+    과거에는 토요일 거래가 92일, 일요일 거래가 2일 있었고 대체·임시공휴일이 빠질 수 있어 실제 거래일과 다를 수 있습니다.
+    예측은 틀릴 수 있으니 참고용으로만 보세요. 데이터: KAMIS.</p>
+  {% else %}
+  <div class="empty">예측이 없습니다. <code>tomato collect backfill</code> → <code>tomato predict</code> → <code>tomato explain</code>을 실행하세요.</div>
+  {% endif %}
+</main>
+
+{% if f %}
+<script src="/static/chart.umd.js"></script>
+<script>
+  const prices = {{ prices | tojson }};
+  const f = {{ f | tojson }};
+  const labels = prices.map(p => p.date).concat([f.target_date_est]);
+  const actual = prices.map(p => p.price).concat([null]);
+  const pred = labels.map(d => d === f.origin_date ? f.y_origin : d === f.target_date_est ? f.y_hat : null);
+  const won = v => v.toLocaleString("ko-KR") + "원";
+  new Chart(document.getElementById("price-chart"), {
+    type: "line",
+    data: { labels, datasets: [
+      { label: "공표가", data: actual, borderColor: "#c0392b", backgroundColor: "#c0392b",
+        borderWidth: 1.5, pointRadius: 0, tension: 0 },
+      { label: "예측", data: pred, borderColor: "#1f6feb", backgroundColor: "#1f6feb",
+        borderDash: [5, 4], borderWidth: 2, pointRadius: labels.map(d => d === f.target_date_est ? 5 : 0),
+        spanGaps: true },
+    ]},
+    options: {
+      maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+      scales: { x: { ticks: { maxTicksLimit: 8 } }, y: { ticks: { callback: won } } },
+      plugins: { tooltip: { callbacks: { label: c => c.parsed.y == null ? "" : `${c.dataset.label} ${won(c.parsed.y)}` } } },
+    },
+  });
+</script>
+{% endif %}
+</body>
+</html>
