@@ -1,0 +1,29 @@
+[project]
+name = "tomato"
+version = "0.1.0"
+description = "KAMIS 토마토 도매가 3거래일 후 예측 + 설명"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "jinja2",
+    "psycopg[binary]",
+    "holidays",
+]
+
+[project.scripts]
+tomato = "tomato.cli:main"
+
+[dependency-groups]
+dev = ["pytest", "httpx"]
+eda = ["matplotlib==3.9.2"]  # scripts/eda_kamis.py
+
+[tool.uv]
+default-groups = ["dev", "eda"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
