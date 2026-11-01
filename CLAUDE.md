@@ -26,4 +26,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - GPU 학습은 Colab A100(휘발성 세션). 결과물(모델·지표)은 파일로 repo에 가져온다.
 
 ## 명령어
-(스택 결정 후 작성)
+- 의존성: `uv sync` · 테스트: `uv run pytest` (단일: `uv run pytest tests/test_metrics.py::test_errors_b1`)
+- DB 테스트: `TEST_DATABASE_URL=postgresql://… uv run pytest tests/test_api_db.py` (없으면 skip)
+- CLI: `uv run tomato db init | collect backfill|daily | predict | backtest --models B1 | explain | show latest` (`DATABASE_URL` 필요)
+- 대시보드: `uv run uvicorn tomato.api.main:app`
