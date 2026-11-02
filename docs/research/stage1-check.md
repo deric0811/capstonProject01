@@ -1,12 +1,12 @@
 # 구현 1단계 확인 기록 (spec §11 중 1·2·3·7)
 
-확인일: 2026-11-01. Docker 설치 전이라 로컬 PostgreSQL 16(임시 인스턴스)과 `uv run`으로 확인했다. Docker 확인(1번, 3번의 네트워크 차단)은 설치 후 추가한다.
+확인일: 2026-11-01 로컬(PostgreSQL 16 임시 인스턴스 + `uv run`), 2026-11-02 Docker(compose v2, `docker-compose.yml`)로 1·2·3번을 다시 확인했다.
 
 | # | 기준 | 결과 |
 |---|---|---|
-| 1 | `docker compose up`으로 DB·API·대시보드 | **미확인** (Docker 미설치). 로컬 uvicorn에서 `/health` = `{"status":"ok","db":"ok"}`, `/` = 200 |
-| 2 | 가격 있는 행과 `평균` 행이 CSV와 키·값 일치 (2026-11-02 기준 수정) | **통과**. `-` 행만 2행 차이 (원인 미확인, 아래) |
-| 3 | daily 실패 시 재시도와 `ingest_run` 기록 | 로컬에서 부분 확인: `KAMIS_URL`을 닫힌 포트로 바꿔 실행. 컨테이너 네트워크 차단은 미확인 |
+| 1 | `docker compose up`으로 DB·API·대시보드 | **통과** (Docker, 2026-11-02). `/health` = `{"status":"ok","db":"ok"}`, `/` = 200 |
+| 2 | 가격 있는 행과 `평균` 행이 CSV와 키·값 일치 (2026-11-02 기준 수정) | **통과** (로컬, Docker 모두). `-` 행만 2행 차이 (원인 미확인, 아래) |
+| 3 | daily 실패 시 재시도와 `ingest_run` 기록 | **통과** (Docker, 외부망이 막힌 `offline` 네트워크). 로컬에서는 닫힌 포트로 확인 |
 | 7 | 대시보드 5개 요소 | 확인 (`tests/test_api_db.py`, headless Chrome 스크린샷 1000px·400px) |
 
 ## 2. backfill 행 수
@@ -36,6 +36,32 @@
   - 2번 실패 후 성공: 대기 2초, 4초
   - 3번 모두 실패: 오류 메시지에서 키가 `***`로 가려짐
 - 정상 `collect daily`(2026-10-26 ~ 11-01): 60행, status=ok
+
+## Docker 확인 (2026-11-02)
+- 환경: Docker compose v2. `db`(postgres:16, named volume `pgdata`)와 `app`(`Dockerfile`로 빌드한 이미지). 포트는 127.0.0.1에만 연다.
+- **1번**: `docker compose build && docker compose up -d`
+  - db healthcheck 통과 후 app이 기동한다(`tomato db init` → uvicorn).
+  - `/health` = `{"status":"ok","db":"ok"}`, `/` = 200
+- **2번**: `docker compose run --rm app tomato collect backfill --from 2002-11-01 --to 2026-10-28`
+  - 73,192행 upsert, 4분 4초, `ingest_run` 1: status=ok, attempts=1
+  - `scripts/check_backfill.py`(호스트에서 컨테이너 DB에 연결)
+
+| | CSV | DB | 결과 |
+|---|---|---|---|
+| 가격 있는 행 | 72,184 | 72,184 | 키·값 일치 |
+| `평균` 행 | 12,036 | 12,036 | 키·값 일치 |
+| `-` 행 (기준 제외) | 1,010 | 1,008 | 로컬과 같은 2행 차이 |
+
+- **3번**: `docker compose --profile fault run --rm app-offline tomato collect daily`
+  - `app-offline`은 `internal: true` 네트워크에만 붙어 DB에는 닿고 외부 인터넷은 막힌다.
+  - 종료 코드 1, 약 6초(대기 2초 + 4초)
+  - `ingest_run` 2: job=daily, status=failed, attempts=3, error=`URLError: <urlopen error [Errno -3] Temporary failure in name resolution>`
+  - `ingest_run.error` 전체에서 API 키·인증 ID 문자열 0건
+  - 비교: 같은 명령을 정상 네트워크(`app`)에서 실행하면 2026-10-27 ~ 11-02, 60행 upsert, status=ok
+- **데이터 유지**: `docker compose down`(`-v` 없이) 후 `up -d`
+  - db 컨테이너의 마운트는 volume `unip-capstonedesign_pgdata` → `/var/lib/postgresql/data`
+  - `price_raw` 73,228행, `ingest_run` 3행이 down 전과 같다.
+  - `docker compose down -v`를 쓰면 volume이 지워진다.
 
 ## 7. 대시보드
 - 표시 요소 5개를 모두 확인했다.
