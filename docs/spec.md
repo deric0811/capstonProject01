@@ -248,7 +248,7 @@ docker-compose.yml, Dockerfile
 ## 11. 완료 기준 (MVP 1순위)
 
 1. `docker compose up`으로 DB·API·대시보드가 뜬다.
-2. `collect backfill` 결과 DB 행 수가 `data-manifest.md`의 2002-11 이후 도매 행 수와 일치한다. `-` 가격은 NULL로 들어간다.
+2. `collect backfill` 결과 DB의 **가격이 있는 행과 `평균` 행**이 원본 CSV(`data-manifest.md`)와 키·값 모두 일치한다. `-` 가격은 NULL로 들어간다. `-` 행의 개수는 요청 기간 경계에 따라 달라지므로 기준에서 제외한다(`docs/research/stage1-check.md`).
 3. `collect daily`가 실패하면 재시도하고, 실패 사유를 `ingest_run`에 남긴다. 실패 상황은 네트워크 차단으로 재현해 확인한다.
 4. `backtest`가 B1·B2와 후보 모델을 **같은 fold, 같은 지표**로 비교한 표를 낸다.
    - 전체 테스트와 급등 구간을 따로 낸다.
