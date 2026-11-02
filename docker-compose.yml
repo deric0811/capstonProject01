@@ -1,0 +1,51 @@
+# 비밀값은 .env에서 읽는다. `docker compose config`는 env_file 값을 출력하므로 쓰지 않는다.
+x-app: &app
+  image: tomato-app:latest
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql://tomato:${POSTGRES_PASSWORD:-tomato}@db:5432/tomato
+    TZ: Asia/Seoul
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: tomato
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tomato}
+      POSTGRES_DB: tomato
+      TZ: Asia/Seoul
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    networks: [default, offline]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tomato -d tomato"]
+      interval: 5s
+      retries: 10
+
+  app:
+    <<: *app
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # 장애 재현용 (spec §11-3): 외부 인터넷이 막힌 네트워크에서 DB에만 연결된다.
+  # docker compose --profile fault run --rm app-offline tomato collect daily
+  app-offline:
+    <<: *app
+    profiles: [fault]
+    networks: [offline]
+    depends_on:
+      db:
+        condition: service_healthy
+
+networks:
+  offline:
+    internal: true
+
+volumes:
+  pgdata:
