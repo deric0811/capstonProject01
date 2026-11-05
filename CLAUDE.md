@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - LLM 설명은 입력된 예측값·데이터·뉴스에만 근거.
 - 크롤링 대상의 이용약관·robots 확인.
 - 비밀값은 `.env`, 개인정보 문서는 repo에 넣지 않음.
-- 현장 인터뷰는 참여 동의, 녹음은 별도 동의, 보고서에는 익명.
+<!-- disused (2026-11-05, 현장 인터뷰 산출물 미사용): - 현장 인터뷰는 참여 동의, 녹음은 별도 동의, 보고서에는 익명. -->
 - API 키는 .env에서 읽고, 출력하거나 파일에 쓰지 않는다
 
 ## 작업 방식
