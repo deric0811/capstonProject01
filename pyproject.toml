@@ -9,6 +9,7 @@ dependencies = [
     "jinja2",
     "psycopg[binary]",
     "holidays",
+    "lightgbm>=4.7.0",
 ]
 
 [project.scripts]

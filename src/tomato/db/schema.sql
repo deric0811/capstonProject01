@@ -64,13 +64,16 @@ CREATE TABLE IF NOT EXISTS forecast (
 CREATE TABLE IF NOT EXISTS backtest_metric (
   id          bigserial PRIMARY KEY,
   experiment  text NOT NULL,            -- 'window=full' | 'window=5y'
+  horizon_tdays integer NOT NULL DEFAULT 3,
   model_name  text NOT NULL,
   segment     text NOT NULL,            -- 'test_all' | 'spike'
-  metric      text NOT NULL,            -- 'mae' | 'mape' | 'rel_mae' | 'dir_acc_ud' | 'dir_acc3' | 'rmse'
+  metric      text NOT NULL,            -- 'mae' | 'mape' | 'rel_mae' | 'dir_acc_ud' | 'dir_acc3' | 'rmse' | 'sim_cost_a' | 'sim_cost_b' | 'sim_diff_won' | 'sim_diff_pct'
   value       numeric NOT NULL,
   n           integer NOT NULL,
   created_at  timestamptz NOT NULL DEFAULT now()
 );
+-- 2단계 전에 만든 DB에도 컬럼을 넣는다. 기존 행은 3거래일 지표이므로 기본값 3이 맞다.
+ALTER TABLE backtest_metric ADD COLUMN IF NOT EXISTS horizon_tdays integer NOT NULL DEFAULT 3;
 
 CREATE TABLE IF NOT EXISTS explanation (
   id          bigserial PRIMARY KEY,

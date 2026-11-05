@@ -1,15 +1,16 @@
-"""tomato CLI (spec §9). 1단계 명령: db init, collect, predict, backtest(B1), explain, show latest."""
+"""tomato CLI (spec §9). db init, collect, predict(B1), backtest, explain, show latest."""
 import argparse
 import datetime as dt
 import sys
 
 from tomato import calendar as cal
+from tomato import features
 from tomato.collectors import kamis
 from tomato.config import load_settings
 from tomato.db import repo
-from tomato.evaluation import metrics, walkforward
+from tomato.evaluation import metrics, selection, walkforward
 from tomato.explain import template
-from tomato.models import baselines
+from tomato.models import baselines, lgbm
 
 YEAR_ROUND_FROM = dt.date(2002, 11, 1)
 
@@ -71,32 +72,73 @@ def cmd_predict(conn, args):
     print(f"forecast {fid}: B1, t={t} y={y0:,} → {walkforward.HORIZON}거래일 후({target} 예상) {y_hat:,}")
 
 
+def _save_backtest(conn, name, params, experiment, horizon, rows, b1_rows):
+    mv = repo.model_version_id(conn, name, params)
+    repo.upsert_forecasts(conn, [{
+        "model_version_id": mv, "experiment": experiment, "origin_date": r["origin_date"],
+        "horizon_tdays": horizon, "target_date_est": r["target_date"], "y_origin": r["y0"],
+        "y_hat": r["y_hat"], "change_pct": round(100 * metrics.change(r["y0"], r["y_hat"]), 3),
+        "direction": metrics.direction(metrics.change(r["y0"], r["y_hat"])), "is_backtest": True,
+    } for r in rows])
+    out = {}
+    b1_seg = walkforward.segments(b1_rows)
+    for seg, seg_rows in walkforward.segments(rows).items():
+        out[seg] = {m["metric"]: m for m in walkforward.score(seg_rows, b1_seg[seg])}
+    repo.replace_metrics(conn, experiment, name, [{**m, "segment": s} for s, ms in out.items() for m in ms.values()],
+                         horizon)
+    return out
+
+
+def _print_table(results):
+    print(f"{'segment':<9} {'model':<10} {'MAE':>8} {'상대MAE':>7} {'MAPE':>6} {'상하적중':>7} {'3분류':>6} {'절감액(A-B)':>13} {'절감%':>6} {'n':>5}")
+    for seg in ("test_all", "spike"):
+        for name, res in results.items():
+            m = res[seg]
+            print(f"{seg:<9} {name:<10} {m['mae']['value']:>8.1f} {m['rel_mae']['value']:>7.4f}"
+                  f" {m['mape']['value']:>6.2f} {100 * m['dir_acc_ud']['value']:>7.1f}"
+                  f" {100 * m['dir_acc3']['value']:>6.1f} {-m['sim_diff_won']['value']:>13,.0f}"
+                  f" {-m['sim_diff_pct']['value']:>6.2f} {m['mae']['n']:>5}")
+
+
 def cmd_backtest(conn, args):
     names = args.models.split(",")
-    unknown = [n for n in names if n not in baselines.MODELS]
+    known = (*baselines.MODELS, "lgbm")
+    unknown = [n for n in names if n not in known]
     if unknown:
-        sys.exit(f"1단계에서는 {', '.join(baselines.MODELS)}만 지원합니다: {unknown}")
-    series = [(d, p) for d, p, _ in _series(conn)]
-    b1_rows = walkforward.backtest(series, baselines.b1)
-    experiment = "window=full"
-    for name in names:
-        rows = walkforward.backtest(series, baselines.MODELS[name])
-        mv = repo.model_version_id(conn, name, {})
-        repo.upsert_forecasts(conn, [{
-            "model_version_id": mv, "experiment": experiment, "origin_date": r["origin_date"],
-            "horizon_tdays": walkforward.HORIZON, "target_date_est": r["target_date"], "y_origin": r["y0"],
-            "y_hat": r["y_hat"], "change_pct": round(100 * metrics.change(r["y0"], r["y_hat"]), 3),
-            "direction": metrics.direction(metrics.change(r["y0"], r["y_hat"])), "is_backtest": True,
-        } for r in rows])
-        out = []
-        b1_seg = walkforward.segments(b1_rows)
-        for seg, seg_rows in walkforward.segments(rows).items():
-            out += [{**m, "segment": seg} for m in walkforward.score(seg_rows, b1_seg[seg])]
-        repo.replace_metrics(conn, experiment, name, out)
-        print(f"\n{name} ({experiment}, 예측 시점 {rows[0]['origin_date']} ~ {rows[-1]['origin_date']})")
-        print(f"{'segment':<9} {'metric':<11} {'value':>12} {'n':>6}")
-        for m in out:
-            print(f"{m['segment']:<9} {m['metric']:<11} {m['value']:>12.4f} {m['n']:>6}")
+        sys.exit(f"지원 모델은 {', '.join(known)}입니다: {unknown}")
+    daily = [features.Daily(*r) for r in repo.wholesale_feature_rows(conn, since=YEAR_ROUND_FROM)]
+    if not daily:
+        sys.exit("wholesale_daily가 비어 있습니다. 먼저 collect backfill을 실행하세요.")
+    if args.to:
+        daily = [r for r in daily if r.date <= args.to]
+    series = [(r.date, r.price) for r in daily]
+    tuned = lgbm.load_params() if "lgbm" in names else None
+    print(f"데이터 {daily[0].date} ~ {daily[-1].date}, {len(daily)}거래일")
+
+    for h in (int(x) for x in args.horizons.split(",")):
+        b1_rows = walkforward.backtest(series, baselines.b1, horizon=h)
+        all_rows, results = {}, {}
+        for name in names:
+            if name == "lgbm":
+                for w in args.window.split(","):
+                    params = tuned[str(h)][w]["params"]
+                    all_rows[f"lgbm-{w}"] = (lgbm.backtest(daily, h, params, w), f"window={w}", {"horizon": h, "window": w, **params})
+            else:
+                all_rows[name] = (walkforward.backtest(series, baselines.MODELS[name], horizon=h), "window=full", {})
+        walkforward.assert_same_origins({"B1": b1_rows, **{k: v[0] for k, v in all_rows.items()}})
+        for label, (rows, experiment, params) in all_rows.items():
+            results[label] = _save_backtest(conn, label.split("-")[0], params, experiment, h, rows, b1_rows)
+        print(f"\n=== h={h}, 예측 시점 {b1_rows[0]['origin_date']} ~ {b1_rows[-1]['origin_date']}, {len(b1_rows)}회 ===")
+        _print_table(results)
+        if tuned and "B2" in results:
+            window = tuned[str(h)]["selected_window"]
+            cand = {"B2": results["B2"], f"lgbm-{window}": results[f"lgbm-{window}"]}
+            chosen, reasons = selection.select(
+                {k: {x: v["test_all"][x]["value"] for x in ("mae", "rel_mae", "dir_acc_ud")} for k, v in cand.items()}
+            )
+            print(f"선택 (h={h}, 검증에서 고른 창 {window}): {chosen}")
+            for reason in reasons:
+                print(f"  - {reason}")
 
 
 def _perf(conn, model):
@@ -148,6 +190,9 @@ def build_parser():
 
     bt = sub.add_parser("backtest")
     bt.add_argument("--models", default="B1")
+    bt.add_argument("--window", default="full,5y", help="full, 5y 또는 full,5y")
+    bt.add_argument("--horizons", default="3,7")
+    bt.add_argument("--to", type=date, help="이 날짜까지의 데이터만 쓴다 (결과 재현용)")
     bt.set_defaults(fn=cmd_backtest)
 
     ex = sub.add_parser("explain")

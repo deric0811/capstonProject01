@@ -1,4 +1,4 @@
-"""평가 지표 (spec §2). y0 = y(t), y = 실제 y(t+3), yhat = 예측."""
+"""평가 지표 (spec §2). y0 = y(t), y = 실제 y(t+h), yhat = 예측."""
 import math
 
 DELTA = 0.03

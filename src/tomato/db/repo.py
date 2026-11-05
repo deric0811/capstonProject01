@@ -60,6 +60,26 @@ def wholesale_series(conn, rank="04", since="2002-11-01"):
     ).fetchall()
 
 
+def wholesale_feature_rows(conn, since="2002-11-01"):
+    """[(trade_date, 상품 평균가, 참여 시장 수, 중품 평균가, 상품 시장별 최댓값−최솟값)] 상품 평균가가 있는 거래일만, 날짜순."""
+    return conn.execute(
+        """
+        SELECT a.trade_date, a.avg_price, a.n_markets, m.avg_price, s.spread
+        FROM wholesale_daily a
+        LEFT JOIN wholesale_daily m ON m.trade_date = a.trade_date AND m.rank_code = '05'
+        LEFT JOIN (
+          SELECT trade_date, max(price) - min(price) AS spread FROM price_raw
+          WHERE market_type = 'wholesale' AND item_code = '225' AND kind_code = '00'
+            AND rank_code = '04' AND county <> '평균' AND price IS NOT NULL
+          GROUP BY trade_date
+        ) s ON s.trade_date = a.trade_date
+        WHERE a.rank_code = '04' AND a.trade_date >= %s AND a.avg_price IS NOT NULL
+        ORDER BY a.trade_date
+        """,
+        (since,),
+    ).fetchall()
+
+
 # --- model / forecast / metric / explanation ----------------------------
 
 def model_version_id(conn, name, params):
@@ -93,21 +113,25 @@ def upsert_forecasts(conn, rows):
     return ids
 
 
-def replace_metrics(conn, experiment, model_name, rows):
+def replace_metrics(conn, experiment, model_name, rows, horizon=3):
     with conn.transaction():
-        conn.execute("DELETE FROM backtest_metric WHERE experiment = %s AND model_name = %s", (experiment, model_name))
+        conn.execute(
+            "DELETE FROM backtest_metric WHERE experiment = %s AND model_name = %s AND horizon_tdays = %s",
+            (experiment, model_name, horizon),
+        )
         for r in rows:
             conn.execute(
-                "INSERT INTO backtest_metric (experiment, model_name, segment, metric, value, n)"
-                " VALUES (%s, %s, %s, %s, %s, %s)",
-                (experiment, model_name, r["segment"], r["metric"], r["value"], r["n"]),
+                "INSERT INTO backtest_metric (experiment, horizon_tdays, model_name, segment, metric, value, n)"
+                " VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (experiment, horizon, model_name, r["segment"], r["metric"], r["value"], r["n"]),
             )
 
 
-def metrics_for(conn, model_name, experiment="window=full", segment="test_all"):
+def metrics_for(conn, model_name, experiment="window=full", segment="test_all", horizon=3):
     rows = conn.execute(
-        "SELECT metric, value, n FROM backtest_metric WHERE model_name = %s AND experiment = %s AND segment = %s",
-        (model_name, experiment, segment),
+        "SELECT metric, value, n FROM backtest_metric"
+        " WHERE model_name = %s AND experiment = %s AND segment = %s AND horizon_tdays = %s",
+        (model_name, experiment, segment, horizon),
     ).fetchall()
     return {m: (float(v), n) for m, v, n in rows}
 
