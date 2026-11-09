@@ -5,6 +5,7 @@
 import itertools
 import json
 import math
+import os
 from pathlib import Path
 
 import lightgbm as lgb
@@ -14,6 +15,7 @@ from tomato import features
 from tomato.evaluation import metrics, walkforward as wf
 
 PARAMS_FILE = Path(__file__).with_name("lgbm_params.json")
+ARTIFACT_DIR = Path(os.environ.get("TOMATO_ARTIFACT_DIR", "artifacts"))
 FIXED = {"feature_fraction": 0.8, "seed": 42, "deterministic": True, "force_row_wise": True, "num_threads": 1,
          "verbosity": -1}
 GRID = [
@@ -77,3 +79,25 @@ def load_params(path=PARAMS_FILE):
     if not path.exists():
         raise FileNotFoundError(f"{path.name}가 없습니다. 먼저 scripts/tune_lgbm.py를 실행하세요.")
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def selected(horizon, tuned=None):
+    """검증 구간에서 고른 학습 창과 그 창의 파라미터. (window, params)"""
+    t = (tuned or load_params())[str(horizon)]
+    return t["selected_window"], t[t["selected_window"]]["params"]
+
+
+def train_final(daily, horizon, params, window):
+    """운영용 학습. 마지막 거래일 다음 날 재학습한 것처럼, 라벨 y(t+h)가 공표된 행만 쓴다. (booster, 학습 첫 날짜)"""
+    days = [r.date for r in daily]
+    y = np.array([r.price for r in daily], dtype=float)
+    X = features.build(daily, horizon)
+    idx = wf.train_indices(days, len(daily), horizon, window)
+    labels = np.log(y[[j + horizon for j in idx]] / y[idx])
+    return fit(X[idx], labels, params), days[idx[0]]
+
+
+def predict_last(booster, daily, horizon):
+    """daily의 마지막 거래일 t에서 ŷ(t+h)."""
+    pred = booster.predict(features.build(daily, horizon)[-1:])[0]
+    return round(daily[-1].price * math.exp(pred))

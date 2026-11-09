@@ -6,6 +6,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from tomato import cli
 from tomato.config import load_settings
 from tomato.db import repo
 
@@ -31,8 +32,12 @@ def _latest(conn):
     f = repo.latest_forecast(conn)
     if not f:
         return None
-    m = repo.metrics_for(conn, f["model"])
+    m = repo.metrics_for(conn, f["model"], cli.metric_experiment(f["model"], f["horizon_tdays"]), horizon=f["horizon_tdays"])
+    label = cli.MODEL_LABELS.get(f["model"], f["model"])
+    if f["model"] == "lgbm":
+        label += f" (학습 창 {cli.metric_experiment('lgbm', f['horizon_tdays']).split('=')[1]})"
     return {
+        "model_label": label,
         **{k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in f.items()},
         "change_pct": float(f["change_pct"]),
         "explanation": repo.latest_explanation(conn, f["id"]),

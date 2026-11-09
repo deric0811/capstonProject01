@@ -57,15 +57,16 @@
       <p>직전가(B1) 방식의 2023년 이후 {{ f.horizon_tdays }}거래일 후 평균 오차 {{ "{:,}".format(p.mae.value | round | int) }}원
         (MAPE {{ "%.1f" | format(p.mape.value) }}%, 예측 {{ "{:,}".format(p.mae.n) }}회). 비교할 후보 모델은 아직 없습니다.</p>
       {% else %}
-      <p>직전가 대비 오차 {{ "%.1f" | format((1 - p.rel_mae.value) * 100) }}% 감소
-        (평균 오차 {{ "{:,}".format(p.mae.value | round | int) }}원, 2023년 이후).</p>
+      <p>{{ f.model_label }}: 직전가(B1) 대비 평균 오차 {{ "%.1f" | format((1 - p.rel_mae.value) * 100) }}% 감소
+        (2023년 이후 {{ f.horizon_tdays }}거래일 후 평균 오차 {{ "{:,}".format(p.mae.value | round | int) }}원,
+        MAPE {{ "%.1f" | format(p.mape.value) }}%, 예측 {{ "{:,}".format(p.mae.n) }}회).</p>
       {% endif %}
     {% else %}
       <p>성능 지표 없음 (tomato backtest 실행 필요).</p>
     {% endif %}
   </section>
 
-  <p class="note">모델: {{ f.model }}. 예상 날짜는 평일 중 공휴일(holidays KR)을 뺀 날로 추정한 것입니다.
+  <p class="note">모델: {{ f.model_label }}. 예상 날짜는 평일 중 공휴일(holidays KR)을 뺀 날로 추정한 것입니다.
     과거에는 토요일 거래가 92일, 일요일 거래가 2일 있었고 대체·임시공휴일이 빠질 수 있어 실제 거래일과 다를 수 있습니다.
     예측은 틀릴 수 있으니 참고용으로만 보세요. 데이터: KAMIS.</p>
   {% else %}

@@ -28,5 +28,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 명령어
 - 의존성: `uv sync` · 테스트: `uv run pytest` (단일: `uv run pytest tests/test_metrics.py::test_errors_b1`)
 - DB 테스트: `TEST_DATABASE_URL=postgresql://… uv run pytest tests/test_api_db.py` (없으면 skip)
-- CLI: `uv run tomato db init | collect backfill|daily | predict | backtest --models B1 | explain | show latest` (`DATABASE_URL` 필요)
+- CLI: `uv run tomato db init | collect backfill|daily | train | predict | backtest --models B1,B2,lgbm --to 2026-11-04 | explain | show latest` (`DATABASE_URL` 필요). Docker: `docker compose run --rm app tomato <명령>`
+- LightGBM 튜닝(검증 구간만): `uv run python scripts/tune_lgbm.py` · 2단계 사후 분석: `uv run python scripts/posthoc_stage2.py`
 - 대시보드: `uv run uvicorn tomato.api.main:app`

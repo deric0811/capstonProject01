@@ -42,3 +42,22 @@ def test_init_db_adds_column_to_existing_table_and_is_repeatable(conn):
         "SELECT count(*) FROM information_schema.columns WHERE table_name = 'backtest_metric' AND column_name = 'horizon_tdays'"
     ).fetchone()[0]
     assert n == 1
+
+
+def test_latest_forecast_filters_horizon_and_trained_model_lookup(conn):
+    import datetime as dt
+    mv = repo.insert_trained_model(conn, "lgbm-test", {"horizon": 7}, dt.date(2002, 11, 1), dt.date(2099, 1, 1), "/x")
+    assert repo.latest_trained_model(conn, "lgbm-test", 7)["id"] == mv
+    assert repo.latest_trained_model(conn, "lgbm-test", 3) is None
+    assert repo.model_version_id(conn, "lgbm-test", {"horizon": 7}) != mv  # backtest용은 학습 행을 쓰지 않는다
+    base = {"model_version_id": mv, "experiment": "live", "origin_date": dt.date(2099, 1, 1), "y_origin": 1,
+            "y_hat": 1, "change_pct": 0, "direction": "flat", "is_backtest": False,
+            "target_date_est": dt.date(2099, 1, 5)}
+    try:
+        repo.upsert_forecasts(conn, [{**base, "horizon_tdays": 3}, {**base, "horizon_tdays": 7}])
+        assert repo.latest_forecast(conn)["horizon_tdays"] == 3
+        assert repo.latest_forecast(conn, horizon=7)["horizon_tdays"] == 7
+    finally:
+        conn.execute("DELETE FROM forecast WHERE model_version_id IN"
+                     " (SELECT id FROM model_version WHERE name = 'lgbm-test')")
+        conn.execute("DELETE FROM model_version WHERE name = 'lgbm-test'")

@@ -37,3 +37,15 @@ def test_seasonal_uses_only_past_months():
     x = template.build_input(SERIES, F)
     assert x["seasonal"]["median"] is None  # 같은 달의 과거 해 데이터 없음
     assert x["trend20"]["start_date"] == SERIES[-21][0].isoformat()
+
+
+def test_lgbm_performance_sentence_uses_input_numbers():
+    f = {**F, "model": "lgbm", "y_hat": F["y_origin"] + 500, "change_pct": 2.1, "direction": "flat"}
+    x = template.build_input(SERIES, f, {"mae": 1416, "mape": 6.3, "n": 934, "mae_reduction_pct": 8.9})
+    text = template.render(x)
+    allowed = set()
+    for v in _flatten(x):
+        allowed |= _numbers(v) | {v.lstrip("+-")}
+    allowed |= {"20", "2023", "5"}
+    assert _numbers(text) <= allowed, _numbers(text) - allowed
+    assert "1,416원" in text and "8.9% 작습니다" in text

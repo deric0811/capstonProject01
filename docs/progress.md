@@ -2,7 +2,7 @@
 
 # 진행 현황: 토마토 가격 예측 + LLM 설명 (캡스톤디자인 2)
 
-갱신: 2026-11-05 · 마감: 2026-11-17경 · 1인 개발
+갱신: 2026-11-09 · 마감: 2026-11-17경 · 1인 개발
 
 ## 1. 현재 단계
 | 단계 | 상태 |
@@ -11,7 +11,7 @@
 | 데이터 확보·EDA | 완료 (`docs/research/`) |
 | Design | 완료 (`docs/spec.md` accepted) |
 | 구현 1단계: B1(직전가)으로 end-to-end | 완료: 수집·DB·B1 예측·템플릿 설명·대시보드·Docker. §11의 1·2·3번은 Docker, 7번은 로컬에서 확인 (`docs/research/stage1-check.md`) |
-| 구현 2단계: LightGBM·backtest(3·7거래일, 매입 시뮬레이션) | 완료 (`docs/research/stage2-backtest.md`). h = 3, 7 모두 LightGBM full 선택. `train`·`predict` 연결은 미정 |
+| 구현 2단계: LightGBM·backtest(3·7거래일, 매입 시뮬레이션) | 완료 (`docs/research/stage2-backtest.md`). h = 3, 7 모두 LightGBM full 선택. `train`·`predict`·대시보드 연결 완료(대시보드·설명은 3거래일) |
 | 구현 3~4단계: LLM 설명(API) → Chronos-2(zero-shot) | 예정 |
 | 3자 비교, 소매 | 예정 (intent MVP 순서 3~4) |
 | 현장 인터뷰·가치 가설 현장 검증 | 하지 않음 (일정 부족, `docs/decisions.md` 2026-11-05). 보고서에 한계 명시 |
@@ -75,5 +75,8 @@
   - 남은 일정은 약 12일이다.
   - 현장 검증을 하지 않으므로 효용은 매입 시뮬레이션으로만 간접 확인한다.
 - **다음 할 일**
-  - `train`·`predict`를 선택 모델과 연결할지 정한다. 지금 대시보드는 B1 3거래일이다.
+  - 사후 분석(선택에 사용하지 않음, `stage2-backtest.md`)
+    - h = 3 방향 적중의 대부분은 단순 추세 규칙(66.1%)으로 설명된다.
+    - DM 검정: h = 3은 유의, h = 7은 p ≈ 0.045~0.048로 경계다.
+  - 호스트 cron 등록 (`deploy/crontab.example`: 매일 예측, 매달 1일 재학습)
   - 3단계: LLM 설명 (API)

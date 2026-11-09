@@ -68,7 +68,10 @@ def render(x):
 
     perf = x["performance"]
     tail = "예측은 틀릴 수 있고 예상 날짜도 평일·공휴일 기준 추정이므로 참고용으로만 보세요."
-    if perf:
+    if perf and perf.get("mae_reduction_pct") is not None:
+        s.append(f"이 모델의 2023년 이후 {x['horizon_tdays']}거래일 후 평균 오차는 {perf['mae']:,}원"
+                 f"(MAPE {perf['mape']:.1f}%)으로, 직전가 방식보다 {perf['mae_reduction_pct']:.1f}% 작습니다. {tail}")
+    elif perf:
         s.append(f"이 방식의 2023년 이후 {x['horizon_tdays']}거래일 후 평균 오차는 {perf['mae']:,}원"
                  f"(MAPE {perf['mape']:.1f}%)입니다. {tail}")
     else:

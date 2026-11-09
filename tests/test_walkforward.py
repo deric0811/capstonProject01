@@ -136,3 +136,27 @@ def test_lgbm_price_is_inverse_of_log_return_target():
     daily = make_daily(1000, dt.date(2019, 1, 1))
     rows = lgbm.backtest(daily, 3, SMALL, "full", start=daily[990].date)
     assert all(abs(metrics.change(r["y0"], r["y_hat"])) < 1 for r in rows)
+
+
+@pytest.mark.parametrize("h", [3, 7])
+def test_train_final_uses_only_published_labels_and_predicts_last_day(h, monkeypatch):
+    daily = make_daily(800, dt.date(2019, 1, 1))
+    seen = {}
+    real_fit = lgbm.fit
+
+    def spy(X, y, params):
+        seen["n"] = len(y)
+        return real_fit(X, y, params)
+
+    monkeypatch.setattr(lgbm, "fit", spy)
+    booster, start = lgbm.train_final(daily, h, SMALL, "full")
+    assert seen["n"] == len(daily) - h  # 마지막 h개 행은 라벨이 아직 없다
+    assert start == daily[0].date
+    y_hat = lgbm.predict_last(booster, daily, h)
+    changed = daily[:-1] + [daily[-1]]
+    assert y_hat == lgbm.predict_last(booster, changed, h) and y_hat > 0
+
+
+def test_selected_reads_window_and_params():
+    tuned = {"3": {"selected_window": "5y", "full": {"params": {"a": 1}}, "5y": {"params": {"b": 2}}}}
+    assert lgbm.selected(3, tuned) == ("5y", {"b": 2})

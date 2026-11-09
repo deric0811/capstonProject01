@@ -30,3 +30,6 @@ def test_dashboard_has_required_elements(client):
     assert 'id="price-chart"' in html and "const prices" in html  # 그래프와 예측점
     assert f["explanation"]["text"] in html  # 설명
     assert "평균 오차" in html  # 성능 한 줄
+    assert f["horizon_tdays"] == 3  # 대시보드는 3거래일
+    if f["model"] == "lgbm":
+        assert "LightGBM" in html and "직전가(B1) 대비 평균 오차" in html

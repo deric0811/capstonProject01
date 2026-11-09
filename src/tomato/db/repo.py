@@ -83,14 +83,34 @@ def wholesale_feature_rows(conn, since="2002-11-01"):
 # --- model / forecast / metric / explanation ----------------------------
 
 def model_version_id(conn, name, params):
+    """backtest·기준선용 model_version. 학습 파일이 있는 행(train)은 쓰지 않는다."""
     row = conn.execute(
-        "SELECT id FROM model_version WHERE name = %s AND params = %s ORDER BY id LIMIT 1", (name, Jsonb(params))
+        "SELECT id FROM model_version WHERE name = %s AND params = %s AND artifact_path IS NULL ORDER BY id LIMIT 1",
+        (name, Jsonb(params)),
     ).fetchone()
     if row:
         return row[0]
     return conn.execute(
         "INSERT INTO model_version (name, params) VALUES (%s, %s) RETURNING id", (name, Jsonb(params))
     ).fetchone()[0]
+
+
+def insert_trained_model(conn, name, params, train_start, train_end, artifact_path):
+    return conn.execute(
+        "INSERT INTO model_version (name, params, train_start, train_end, artifact_path)"
+        " VALUES (%s, %s, %s, %s, %s) RETURNING id",
+        (name, Jsonb(params), train_start, train_end, artifact_path),
+    ).fetchone()[0]
+
+
+def latest_trained_model(conn, name, horizon):
+    """{'id', 'params', 'train_end', 'artifact_path'} 또는 None."""
+    row = conn.execute(
+        "SELECT id, params, train_end, artifact_path FROM model_version"
+        " WHERE name = %s AND artifact_path IS NOT NULL AND (params->>'horizon')::int = %s ORDER BY id DESC LIMIT 1",
+        (name, horizon),
+    ).fetchone()
+    return dict(zip(("id", "params", "train_end", "artifact_path"), row)) if row else None
 
 
 FORECAST_COLS = ("model_version_id", "experiment", "origin_date", "horizon_tdays", "target_date_est",
@@ -144,10 +164,12 @@ _FORECAST_KEYS = ("id", "model", "origin_date", "horizon_tdays", "target_date_es
                   "change_pct", "direction")
 
 
-def latest_forecast(conn):
+def latest_forecast(conn, horizon=3):
+    """대시보드·설명용 최신 예측. 기본은 h = 3."""
     row = conn.execute(
-        _FORECAST_SELECT + " WHERE NOT f.is_backtest AND f.experiment = 'live'"
-        " ORDER BY f.origin_date DESC, f.id DESC LIMIT 1"
+        _FORECAST_SELECT + " WHERE NOT f.is_backtest AND f.experiment = 'live' AND f.horizon_tdays = %s"
+        " ORDER BY f.origin_date DESC, f.id DESC LIMIT 1",
+        (horizon,),
     ).fetchone()
     return dict(zip(_FORECAST_KEYS, row)) if row else None
 

@@ -5,6 +5,9 @@ x-app: &app
   environment:
     DATABASE_URL: postgresql://tomato:${POSTGRES_PASSWORD:-tomato}@db:5432/tomato
     TZ: Asia/Seoul
+    TOMATO_ARTIFACT_DIR: /app/artifacts
+  volumes:
+    - models:/app/artifacts  # tomato train 결과(LightGBM 모델 파일)
 
 services:
   db:
@@ -49,3 +52,4 @@ networks:
 
 volumes:
   pgdata:
+  models:

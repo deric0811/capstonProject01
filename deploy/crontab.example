@@ -1,3 +1,5 @@
 # 호스트 cron 예시 (spec §9). 등록: crontab -e 에 아래 줄을 경로에 맞게 추가한다.
-# 매일 20시: 최근 7일 수집 → B1 예측 → 템플릿 설명
-0 20 * * * cd /home/h2omol/myProjects/uniP-CapstoneDesign && docker compose run --rm app tomato collect daily && docker compose run --rm app tomato predict && docker compose run --rm app tomato explain >> /tmp/tomato-cron.log 2>&1
+# 매일 20시: 최근 7일 수집 → LightGBM 예측(3·7거래일) → 템플릿 설명(3거래일)
+0 20 * * * cd /home/h2omol/myProjects/uniP-CapstoneDesign && { docker compose run --rm app tomato collect daily && docker compose run --rm app tomato predict && docker compose run --rm app tomato explain; } >> /tmp/tomato-cron.log 2>&1
+# 매달 1일 19시: 재학습 (spec §5 월 1회). 같은 날 20시 예측부터 새 모델을 쓴다.
+0 19 1 * * cd /home/h2omol/myProjects/uniP-CapstoneDesign && docker compose run --rm app tomato train >> /tmp/tomato-cron.log 2>&1
