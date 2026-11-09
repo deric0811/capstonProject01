@@ -11,7 +11,7 @@ from tomato import features
 from tomato.collectors import kamis
 from tomato.config import load_settings
 from tomato.db import repo
-from tomato.evaluation import metrics, selection, walkforward
+from tomato.evaluation import metrics, selection, simulation, walkforward
 from tomato.explain import template
 from tomato.models import baselines, lgbm
 
@@ -120,7 +120,7 @@ def cmd_predict(conn, args):
               f"({row['target_date_est']} 예상) {row['y_hat']:,} ({row['change_pct']:+.1f}%, {row['direction']})")
 
 
-def _save_backtest(conn, name, params, experiment, horizon, rows, b1_rows):
+def _save_backtest(conn, name, params, experiment, horizon, rows, b1_rows, simulate, dm=False):
     mv = repo.model_version_id(conn, name, params)
     repo.upsert_forecasts(conn, [{
         "model_version_id": mv, "experiment": experiment, "origin_date": r["origin_date"],
@@ -128,24 +128,48 @@ def _save_backtest(conn, name, params, experiment, horizon, rows, b1_rows):
         "y_hat": r["y_hat"], "change_pct": round(100 * metrics.change(r["y0"], r["y_hat"]), 3),
         "direction": metrics.direction(metrics.change(r["y0"], r["y_hat"])), "is_backtest": True,
     } for r in rows])
-    out = {}
+    out, notes = {}, []
     b1_seg = walkforward.segments(b1_rows)
     for seg, seg_rows in walkforward.segments(rows).items():
-        out[seg] = {m["metric"]: m for m in walkforward.score(seg_rows, b1_seg[seg])}
+        ms = walkforward.score(seg_rows, b1_seg[seg], simulate)
+        if dm:
+            dm_metrics, info = walkforward.score_dm(seg_rows, b1_seg[seg], horizon)
+            ms += dm_metrics
+            notes.append(f"DM {seg}: 통계량 {info['stat']:.3f}, p {info['p']:.4f}, 커널 {info['kernel']},"
+                         f" α {walkforward.DM_ALPHA} 기준 {'유의' if info['p'] < walkforward.DM_ALPHA else '유의하지 않음'}")
+        out[seg] = {m["metric"]: m for m in ms}
+    _replace(conn, experiment, name, horizon, out)
+    return out, notes
+
+
+def _replace(conn, experiment, name, horizon, out):
     repo.replace_metrics(conn, experiment, name, [{**m, "segment": s} for s, ms in out.items() for m in ms.values()],
                          horizon)
+
+
+def _save_reference(conn, name, horizon, b1_rows, score):
+    """B3·오라클: 가격 예측이 없어 forecast는 저장하지 않고 지표만 저장한다."""
+    out = {seg: {m["metric"]: m for m in score(rows)} for seg, rows in walkforward.segments(b1_rows).items()}
+    _replace(conn, "window=full", name, horizon, out)
     return out
 
 
+def _fmt(m, key, spec, scale=1.0, sign=1):
+    return format(sign * scale * m[key]["value"], spec) if key in m else "—"
+
+
 def _print_table(results):
-    print(f"{'segment':<9} {'model':<10} {'MAE':>8} {'상대MAE':>7} {'MAPE':>6} {'상하적중':>7} {'3분류':>6} {'절감액(A-B)':>13} {'절감%':>6} {'n':>5}")
+    print(f"{'segment':<9} {'model':<12} {'MAE':>8} {'상대MAE':>7} {'MAPE':>6} {'상하적중':>7} {'3분류':>6} {'절감액(A-B)':>13} {'절감%':>6} {'n':>5}")
     for seg in ("test_all", "spike"):
         for name, res in results.items():
             m = res[seg]
-            print(f"{seg:<9} {name:<10} {m['mae']['value']:>8.1f} {m['rel_mae']['value']:>7.4f}"
-                  f" {m['mape']['value']:>6.2f} {100 * m['dir_acc_ud']['value']:>7.1f}"
-                  f" {100 * m['dir_acc3']['value']:>6.1f} {-m['sim_diff_won']['value']:>13,.0f}"
-                  f" {-m['sim_diff_pct']['value']:>6.2f} {m['mae']['n']:>5}")
+            n = next(iter(m.values()))["n"] if "mae" not in m else m["mae"]["n"]
+            if "sim_cost_a" in m:
+                n = m["sim_cost_a"]["n"]
+            print(f"{seg:<9} {name:<12} {_fmt(m, 'mae', '>8.1f')} {_fmt(m, 'rel_mae', '>7.4f')}"
+                  f" {_fmt(m, 'mape', '>6.2f')} {_fmt(m, 'dir_acc_ud', '>7.1f', 100)}"
+                  f" {_fmt(m, 'dir_acc3', '>6.1f', 100)} {_fmt(m, 'sim_diff_won', '>13,.0f', sign=-1)}"
+                  f" {_fmt(m, 'sim_diff_pct', '>6.2f', sign=-1)} {n:>5}")
 
 
 def cmd_backtest(conn, args):
@@ -160,27 +184,39 @@ def cmd_backtest(conn, args):
     print(f"데이터 {daily[0].date} ~ {daily[-1].date}, {len(daily)}거래일")
 
     for h in _horizons(args.horizons):
+        simulate = h in walkforward.SIM_HORIZONS
+        selected = tuned[str(h)]["selected_window"] if tuned else None
         b1_rows = walkforward.backtest(series, baselines.b1, horizon=h)
-        all_rows, results = {}, {}
+        all_rows, results, notes = {}, {}, []
         for name in names:
             if name == "lgbm":
                 for w in args.window.split(","):
                     params = tuned[str(h)][w]["params"]
-                    all_rows[f"lgbm-{w}"] = (lgbm.backtest(daily, h, params, w), f"window={w}", {"horizon": h, "window": w, **params})
+                    all_rows[f"lgbm-{w}"] = (lgbm.backtest(daily, h, params, w), f"window={w}",
+                                             {"horizon": h, "window": w, **params})
             else:
                 all_rows[name] = (walkforward.backtest(series, baselines.MODELS[name], horizon=h), "window=full", {})
         walkforward.assert_same_origins({"B1": b1_rows, **{k: v[0] for k, v in all_rows.items()}})
         for label, (rows, experiment, params) in all_rows.items():
-            results[label] = _save_backtest(conn, label.split("-")[0], params, experiment, h, rows, b1_rows)
-        print(f"\n=== h={h}, 예측 시점 {b1_rows[0]['origin_date']} ~ {b1_rows[-1]['origin_date']}, {len(b1_rows)}회 ===")
+            dm = h in walkforward.DM_HORIZONS and label == f"lgbm-{selected}"
+            results[label], n = _save_backtest(conn, label.split("-")[0], params, experiment, h, rows, b1_rows,
+                                               simulate, dm)
+            notes += n
+        results["B3"] = _save_reference(conn, "B3", h, b1_rows, lambda r: walkforward.score_b3(r, simulate))
+        if simulate:
+            for name, fn in (("oracle_opt", simulation.oracle_opt_buys_now), ("oracle_rule", simulation.oracle_rule_buys_now)):
+                results[name] = _save_reference(conn, name, h, b1_rows, lambda r, fn=fn: walkforward.score_oracle(r, fn))
+        print(f"\n=== h={h}, 예측 시점 {b1_rows[0]['origin_date']} ~ {b1_rows[-1]['origin_date']}, {len(b1_rows)}회"
+              f"{'' if simulate else ', 매입 시뮬레이션 없음'} ===")
         _print_table(results)
+        for note in notes:
+            print(note)
         if tuned and "B2" in results:
-            window = tuned[str(h)]["selected_window"]
-            cand = {"B2": results["B2"], f"lgbm-{window}": results[f"lgbm-{window}"]}
+            cand = {"B2": results["B2"], f"lgbm-{selected}": results[f"lgbm-{selected}"]}
             chosen, reasons = selection.select(
                 {k: {x: v["test_all"][x]["value"] for x in ("mae", "rel_mae", "dir_acc_ud")} for k, v in cand.items()}
             )
-            print(f"선택 (h={h}, 검증에서 고른 창 {window}): {chosen}")
+            print(f"선택 (h={h}, 검증에서 고른 창 {selected}): {chosen}")
             for reason in reasons:
                 print(f"  - {reason}")
 
@@ -248,7 +284,7 @@ def build_parser():
     bt = sub.add_parser("backtest")
     bt.add_argument("--models", default="B1")
     bt.add_argument("--window", default="full,5y", help="full, 5y 또는 full,5y")
-    bt.add_argument("--horizons", default="3,7")
+    bt.add_argument("--horizons", default="3,7,21")
     bt.add_argument("--to", type=date, help="이 날짜까지의 데이터만 쓴다 (결과 재현용)")
     bt.set_defaults(fn=cmd_backtest)
 

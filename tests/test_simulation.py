@@ -61,3 +61,28 @@ def test_select_falls_back_to_b1():
 
 def test_select_b2_itself_is_not_excluded_by_its_own_direction():
     assert selection.select({"B2": m(100, 0.9, 0.6), "lgbm": m(110, 1.1, 0.9)})[0] == "B2"
+
+
+def test_b3_signal_is_strictly_above_mean_without_delta():
+    assert simulation.strategy_b_cost({"y0": 101, "mean5": 100, "y1": 1, "y": 2}, simulation.b3_buys_now) == 1
+    assert simulation.strategy_b_cost({"y0": 100, "mean5": 100, "y1": 1, "y": 2}, simulation.b3_buys_now) == 2
+
+
+def test_oracles_hand_calculation():
+    rows = [
+        row(10000, 10100, 11000, 0),  # 실제 +10%: 규칙·최적 모두 t+1 → 10100
+        row(10000, 10300, 10200, 0),  # 실제 +2%: 규칙은 t+h 10200, 최적도 10200
+        row(10000, 9800, 10250, 0),  # 실제 +2.5%: 규칙은 t+h 10250, 최적은 t+1 9800
+    ]
+    opt = {m["metric"]: m["value"] for m in simulation.simulate(rows, simulation.oracle_opt_buys_now)}
+    rule = {m["metric"]: m["value"] for m in simulation.simulate(rows, simulation.oracle_rule_buys_now)}
+    assert opt["sim_cost_b"] == 10100 + 10200 + 9800
+    assert rule["sim_cost_b"] == 10100 + 10200 + 10250
+
+
+def test_oracle_opt_is_lower_bound_of_any_strategy():
+    import itertools
+    rows = [row(100, 105, 99, 0), row(100, 98, 101, 0), row(100, 100, 100, 0)]
+    best = sum(simulation.strategy_b_cost(r, simulation.oracle_opt_buys_now) for r in rows)
+    for picks in itertools.product([True, False], repeat=3):
+        assert best <= sum(r["y1"] if p else r["y"] for r, p in zip(rows, picks))

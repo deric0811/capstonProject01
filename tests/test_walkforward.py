@@ -160,3 +160,19 @@ def test_train_final_uses_only_published_labels_and_predicts_last_day(h, monkeyp
 def test_selected_reads_window_and_params():
     tuned = {"3": {"selected_window": "5y", "full": {"params": {"a": 1}}, "5y": {"params": {"b": 2}}}}
     assert lgbm.selected(3, tuned) == ("5y", {"b": 2})
+
+
+def test_backtest_rows_carry_exact_mean5():
+    d0 = dt.date(2023, 1, 2)
+    series = [(d0 + dt.timedelta(days=i), p) for i, p in enumerate([100, 100, 100, 100, 103, 50, 50])]
+    rows = wf.backtest(series, baselines.b1, start=d0 + dt.timedelta(days=4), horizon=1)
+    assert rows[0]["mean5"] == 100.6  # 반올림하지 않는다 (B3 경계)
+
+
+def test_score_b3_and_no_simulation_for_h21():
+    rows = [{"origin_date": dt.date(2023, 1, 2), "y0": 110, "y1": 111, "y": 120, "y_hat": 110, "mean5": 100},
+            {"origin_date": dt.date(2023, 1, 3), "y0": 100, "y1": 101, "y": 90, "y_hat": 100, "mean5": 100}]
+    out = {m["metric"]: m["value"] for m in wf.score_b3(rows)}
+    assert out["dir_acc_ud"] == 0.5 and out["sim_cost_b"] == 111 + 90
+    assert [m["metric"] for m in wf.score_b3(rows, simulate=False)] == ["dir_acc_ud"]
+    assert not any(m["metric"].startswith("sim_") for m in wf.score(rows, rows, simulate=False))

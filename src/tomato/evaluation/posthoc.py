@@ -16,7 +16,7 @@ def trend_updown_accuracy(rows, history_by_origin, delta=metrics.DELTA):
     return metrics.updown_accuracy(y0, y, pseudo, delta)
 
 
-def diebold_mariano(e_model, e_base, horizon):
+def diebold_mariano(e_model, e_base, horizon, fallback=False):
     """절대오차 손실 차 d = |e_model| − |e_base|의 DM 통계량과 양측 p값(정규근사).
 
     분산은 lag h−1까지의 자기공분산 합(직사각형 커널, Diebold-Mariano 1995). 음수면 B가 아니라 모델 오차가 작다.
@@ -28,8 +28,10 @@ def diebold_mariano(e_model, e_base, horizon):
     def gamma(k):
         return sum((d[t] - mean) * (d[t - k] - mean) for t in range(k, n)) / n
 
-    var = gamma(0) + 2 * sum(gamma(k) for k in range(1, horizon))
+    var, kernel = gamma(0) + 2 * sum(gamma(k) for k in range(1, horizon)), "rectangular"
+    if var <= 0 and fallback:  # 같은 lag의 Bartlett(Newey-West) 가중 (spec §2)
+        var, kernel = gamma(0) + 2 * sum((1 - k / horizon) * gamma(k) for k in range(1, horizon)), "bartlett"
     if var <= 0:
         raise ValueError(f"HAC 분산이 0 이하입니다: {var}")
     stat = mean / math.sqrt(var / n)
-    return {"stat": stat, "p": math.erfc(abs(stat) / math.sqrt(2)), "mean_d": mean, "n": n}
+    return {"stat": stat, "p": math.erfc(abs(stat) / math.sqrt(2)), "mean_d": mean, "n": n, "kernel": kernel}

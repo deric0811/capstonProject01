@@ -46,3 +46,18 @@ def test_dm_uses_autocovariances_up_to_h_minus_1():
 def test_dm_rejects_non_positive_variance():
     with pytest.raises(ValueError):
         posthoc.diebold_mariano([1, 1, 1], [0, 0, 0], 1)
+
+
+def test_dm_falls_back_to_bartlett_when_rectangular_variance_is_not_positive():
+    # 강한 음의 자기상관: h = 2에서 직사각형 커널 분산이 음수가 된다
+    d = [1.5, -0.5] * 10
+    e_model, e_base = [x + 5 for x in d], [5] * 20
+    with pytest.raises(ValueError):
+        posthoc.diebold_mariano(e_model, e_base, 2)
+    out = posthoc.diebold_mariano(e_model, e_base, 2, fallback=True)
+    assert out["kernel"] == "bartlett"
+    n, mean = 20, 0.5
+    g = [sum((d[t] - mean) * (d[t - k] - mean) for t in range(k, n)) / n for k in range(2)]
+    var = g[0] + 2 * (1 - 1 / 2) * g[1]  # Bartlett 가중 1 − k/(L+1), L = h − 1
+    assert out["stat"] == pytest.approx(mean / math.sqrt(var / n))
+    assert posthoc.diebold_mariano([1, 3, 2, 5], [2, 2, 2, 2], 1, fallback=True)["kernel"] == "rectangular"

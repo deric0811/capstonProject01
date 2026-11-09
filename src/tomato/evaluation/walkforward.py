@@ -2,14 +2,18 @@
 import datetime as dt
 
 from tomato.calendar import observed_target
-from tomato.evaluation import metrics, simulation
+from tomato.evaluation import metrics, posthoc, simulation
+from tomato.models import baselines
 
 TEST_START = dt.date(2023, 1, 1)
 VALID_START = dt.date(2020, 1, 1)
 VALID_END = dt.date(2022, 12, 31)
 SPIKE = (dt.date(2023, 9, 1), dt.date(2024, 12, 31))  # 예측 시점 기준
 HORIZON = 3
-HORIZONS = (3, 7)
+HORIZONS = (3, 7)  # 운영(predict)과 매입 시뮬레이션 대상
+SIM_HORIZONS = (3, 7)
+DM_HORIZONS = (21,)  # 사전 등록한 DM 검정 (spec §2, 본페로니 α = 0.025)
+DM_ALPHA = 0.05 / 2
 WINDOWS = ("full", "5y")
 
 
@@ -24,9 +28,9 @@ def backtest(series, predict, start=TEST_START, horizon=HORIZON):
         target = observed_target(days, t, horizon)
         if target is None:
             break
-        y_hat = round(predict([p for _, p in series[: i + 1]]))
+        history = [p for _, p in series[: i + 1]]
         out.append({"origin_date": t, "target_date": target, "y0": y0, "y1": series[i + 1][1], "y": price[target],
-                    "y_hat": y_hat})
+                    "y_hat": round(predict(history)), "mean5": baselines.b2(history)})
     return out
 
 
@@ -59,7 +63,7 @@ def assert_same_origins(rows_by_model):
         raise ValueError(f"예측 시점 집합이 다릅니다: {bad}")
 
 
-def score(rows, b1_rows):
+def score(rows, b1_rows, simulate=True):
     """rows와 b1_rows는 같은 예측 시점 집합이어야 한다. [{'metric', 'value', 'n'}]"""
     assert_same_origins({"model": rows, "B1": b1_rows})
     y0, y, yh = ([r[k] for r in rows] for k in ("y0", "y", "y_hat"))
@@ -72,8 +76,29 @@ def score(rows, b1_rows):
         {"metric": "rel_mae", "value": metrics.relative_mae(y, yh, [r["y_hat"] for r in b1_rows]), "n": n},
         {"metric": "dir_acc_ud", "value": ud, "n": n_ud},
         {"metric": "dir_acc3", "value": metrics.three_class_accuracy(y0, y, yh), "n": n},
-        *simulation.simulate(rows),
+        *(simulation.simulate(rows) if simulate else []),
     ]
+
+
+def score_b3(rows, simulate=True):
+    """B3 추세 규칙: 상승/하락 적중률과 매입 시뮬레이션만. rows에 mean5 필요."""
+    pseudo = [r["y0"] + (r["y0"] - r["mean5"]) for r in rows]  # 부호만 쓰므로 예측 등락률의 부호 = y(t) − 평균의 부호
+    ud, n_ud = metrics.updown_accuracy([r["y0"] for r in rows], [r["y"] for r in rows], pseudo)
+    out = [{"metric": "dir_acc_ud", "value": ud, "n": n_ud}]
+    return out + (simulation.simulate(rows, simulation.b3_buys_now) if simulate else [])
+
+
+def score_oracle(rows, buys_now):
+    return simulation.simulate(rows, buys_now)
+
+
+def score_dm(rows, b1_rows, horizon):
+    """LightGBM vs B1 DM 검정 (spec §2). 분산이 0 이하면 Bartlett 가중."""
+    assert_same_origins({"model": rows, "B1": b1_rows})
+    dm = posthoc.diebold_mariano([r["y"] - r["y_hat"] for r in rows], [r["y"] - r["y_hat"] for r in b1_rows], horizon,
+                                 fallback=True)
+    return [{"metric": "dm_stat", "value": dm["stat"], "n": dm["n"]},
+            {"metric": "dm_p", "value": dm["p"], "n": dm["n"]}], dm
 
 
 def segments(rows):
