@@ -1,6 +1,6 @@
 # Spec: MVP 1순위, 도매 3·7거래일 후 end-to-end
 
-Status: accepted · Date: 2026-11-01 · 개정: 2026-11-05 (7거래일 평가, 매입 시뮬레이션, 범위 축소. 2단계 결과를 보기 전에 고정) · 근거: `intent/intent.md`(accepted v3.1), `docs/research/data-sources.md`, `docs/research/eda.md`
+Status: accepted · Date: 2026-11-01 · 개정: 2026-11-05 (7거래일 평가, 매입 시뮬레이션, 범위 축소. 2단계 결과를 보기 전에 고정), 2026-11-09 (B3, 오라클 시뮬레이션, h = 21 사전 등록) · 근거: `intent/intent.md`(accepted v3.1), `docs/research/data-sources.md`, `docs/research/eda.md`
 
 > 표기: 표시 없는 항목은 결정된 것. **[미정]**은 아직 정하지 않은 것.
 > 범위: 수집 → 기준선 vs 후보 모델 → LLM 설명 → 대시보드 한 화면 + CLI → Docker. 소매·RAG·현장 테스트·3자 비교는 범위 밖. 7거래일은 평가와 `predict` 저장까지만 하고, 대시보드와 설명은 3거래일을 유지한다.
@@ -13,7 +13,7 @@ Status: accepted · Date: 2026-11-01 · 개정: 2026-11-05 (7거래일 평가, �
 |---|---|
 | 대상 | KAMIS 공표 도매 평균가: 토마토(225/00), 상품(04), 5kg, `평균` 행. = 그날 가격이 있는 시장의 단순 평균 (eda.md §2) |
 | 사용 기간 | 2002-11 이후. 그 이전은 3~10월만 있어 제외 |
-| 기간 | 거래일 기준 **h = 3, 7거래일 후** (`forecast.horizon_tdays`). 거래일 = `평균` 행이 있는 날 |
+| 기간 | 거래일 기준 **h = 3, 7거래일 후** (`forecast.horizon_tdays`). 거래일 = `평균` 행이 있는 날. h = 21(약 30일)은 평가만 한다(§2, predict 저장 없음) |
 | 출력 | 기간별 `ŷ(t+h)` 가격(원/5kg), 등락률 `(ŷ(t+h) − y(t)) / y(t)`, 방향(상승/보합/하락) |
 | 예측 시점 | 거래일 t의 공표가를 받은 뒤 예측한다. t 이후의 정보는 사용하지 않는다 |
 | 수집 시각 | 매일 20시. `collect daily`가 최근 7일을 다시 받으므로 공표가 늦어도 다음 수집에서 채워진다(공표 시각 때문에 막히지 않음). 실제 공표 시각은 운영하면서 관찰해 기록한다 |
@@ -24,6 +24,9 @@ Status: accepted · Date: 2026-11-01 · 개정: 2026-11-05 (7거래일 평가, �
 ## 2. 평가 지표
 
 모든 지표는 walk-forward 테스트 구간에서, 모든 모델에 대해 같은 예측 시점 집합으로 계산한다.
+- h = 21: MAE, MAPE, 상대 MAE, 상승/하락 적중률, 3분류 적중률, 모델 선택 규칙을 같은 방식으로 적용한다. 매입 시뮬레이션은 적용하지 않는다.
+- 결과표에는 항상 B1·B2·B3를 함께 싣는다. B3는 가격을 내지 않으므로 MAE 계열과 3분류 칸은 "—"로 둔다.
+
 지표와 표는 h별로 따로 낸다. 예측 시점 집합은 h 안에서 모델 간에 같다. h = 7은 끝부분 예측 시점이 더 적으므로 h끼리 총액을 직접 비교하지 않는다.
 
 **가격 오차**
@@ -66,6 +69,16 @@ h별로 따로 적용한다. 기간마다 다른 모델이 뽑힐 수 있다.
   - 기간이 겹치는 매입이라 관측이 독립이 아니다
   - 수수료·보관비·품질 변화는 넣지 않았다
   - B1은 예측 등락률이 항상 0이므로 B1의 전략 B는 "항상 마지막 날 매입"이다
+- B3의 전략 B: 상승 = y(t) > 최근 5거래일 평균(t 포함). B3는 등락 폭이 없으므로 δ를 쓰지 않는다. 같은 값이면 상승이 아니다(t+h에 산다).
+- 오라클 (h = 3, 7. 절감액의 상한으로 보고하고 선택에는 쓰지 않는다)
+  - 오라클-최적: 비용 min(y(t+1), y(t+h)). t+1과 t+h 중 하나를 고르는 어떤 전략도 이보다 싸게 살 수 없다.
+  - 오라클-규칙: 같은 규칙의 예측 등락률 자리에 실제 등락률 (y(t+h) − y(t)) / y(t)를 넣는다. 엄밀한 상한은 아니다. 실제 r ≤ 3%인데 y(t+1) < y(t+h)인 날에는 모델이 더 싸게 살 수 있다.
+
+**h = 21 Diebold-Mariano 검정** (사전 등록. 보고만 하고 모델 선택 규칙에는 쓰지 않는다)
+- 비교: LightGBM(검증에서 고른 창) vs B1. 손실 = 절대오차, d = |e_LightGBM| − |e_B1|.
+- 분산: lag h−1 = 20까지의 자기공분산 합(직사각형 커널). 0 이하면 같은 lag의 Bartlett(Newey-West) 가중으로 바꾸고 그 사실을 보고한다.
+- 판정: 양측 정규근사 p값. 검정 2개(전체, 급등)에 본페로니 보정을 적용해 각각 α = 0.05 / 2 = **0.025** 미만이면 유의로 본다.
+- 한계: 21거래일 예측은 서로 많이 겹쳐 유효 표본이 작고(약 n/21), 검정력이 낮다.
   - 현장 검증을 하지 않으므로 효용은 이 시뮬레이션으로만 간접 확인한다. 보고서에 이 한계를 명시한다 (docs/decisions.md 2026-11-05)
 
 ## 3. 기준선
@@ -74,6 +87,7 @@ h별로 따로 적용한다. 기간마다 다른 모델이 뽑힐 수 있다.
 |---|---|---|
 | B1 직전가 | ŷ(t+h) = y(t) | 상대 MAE의 분모 |
 | B2 최근 평균 | ŷ(t+h) = 최근 5거래일 평균 (k = 5, 두 기간 모두) | 선택 규칙 3의 비교 대상 |
+| B3 추세 규칙 | 방향만: y(t) > 최근 5거래일 평균이면 상승, < 이면 하락, 같으면 예측 없음(오답) | 방향 지표·매입 시뮬레이션에만 쓴다. 선택 후보 아님 |
 
 ## 4. 후보 모델
 
@@ -83,7 +97,7 @@ h별로 따로 적용한다. 기간마다 다른 모델이 뽑힐 수 있다.
 | **Chronos-2** (시계열 파운데이션 모델, zero-shot) | 학습 없이 예측하므로 트리 모델과 성격이 다르다. 참여 시장 수를 공변량으로 넣을 수 있는지는 구현 때 확인 | Colab A100. CPU에서도 돌아가는지 [미정] |
 
 - **학습 목표**: h거래일 로그수익률 `log(y(t+h)/y(t))`을 예측한 뒤 가격으로 되돌린다. h별로 모델을 따로 학습한다.
-- **하이퍼파라미터**: h별로, 테스트 시작 전의 검증 구간(2020~2022)에서만 고르고, 테스트 동안에는 고정한다.
+- **하이퍼파라미터**: h별로, 테스트 시작 전의 검증 구간(2020~2022)에서만 고르고, 테스트 동안에는 고정한다. h = 21도 같은 24조합, 같은 검증 구간을 쓰고, 테스트 실행 전에 `lgbm_params.json`을 커밋한다.
 - **향후 과제** (이번 범위 제외. docs/decisions.md 2026-11-05)
   - TabPFN (회귀, LightGBM과 같은 feature)
   - B3 계절 기준선: ŷ(t+3) = y(t) × 전년 같은 시기 3거래일 변화율
@@ -113,7 +127,7 @@ h별로 따로 적용한다. 기간마다 다른 모델이 뽑힐 수 있다.
 - **누수 방지**
   - 이동평균 등 모든 feature는 t까지만 사용한다.
   - 테스트 구간 결과를 보고 feature나 지표를 바꾸지 않는다. 바꿔야 하면 사유를 기록하고 처음부터 다시 돌린다.
-- **기간**: h = 3, 7 모두 같은 구간, 같은 재학습 주기, 같은 학습 창 비교를 쓴다.
+- **기간**: h = 3, 7, 21 모두 같은 구간, 같은 재학습 주기, 같은 학습 창 비교를 쓴다.
 - **Chronos-2**: 학습이 없으므로 같은 예측 시점마다 그 시점까지의 이력만 넣어 예측한다.
 
 ## 6. LLM 설명
@@ -203,7 +217,7 @@ CREATE TABLE backtest_metric (
   horizon_tdays integer NOT NULL DEFAULT 3,
   model_name  text NOT NULL,
   segment     text NOT NULL,            -- 'test_all' | 'spike'
-  metric      text NOT NULL,            -- 'mae' | 'mape' | 'rel_mae' | 'dir_acc_ud' | 'dir_acc3' | 'rmse' | 'sim_cost_a' | 'sim_cost_b' | 'sim_diff_won' | 'sim_diff_pct'
+  metric      text NOT NULL,            -- 'mae' | 'mape' | 'rel_mae' | 'dir_acc_ud' | 'dir_acc3' | 'rmse' | 'sim_cost_a' | 'sim_cost_b' | 'sim_diff_won' | 'sim_diff_pct' | 'dm_stat' | 'dm_p'  (B3·오라클은 model_name 'B3', 'oracle_opt', 'oracle_rule')
   value       numeric NOT NULL,
   n           integer NOT NULL,
   created_at  timestamptz NOT NULL DEFAULT now()
@@ -251,7 +265,7 @@ docker-compose.yml, Dockerfile
 | `tomato db init` | `schema.sql` 적용 |
 | `tomato collect backfill --market wholesale --from 2002-11-01 [--to …]` | 1년 단위로 나눠 받아 upsert |
 | `tomato collect daily [--days 7]` | 최근 7일을 다시 받아 upsert. 실패 시 재시도(3회, 간격 증가), `ingest_run`에 기록 |
-| `tomato backtest --models B1,B2,lgbm [--window full\|5y] [--horizons 3,7]` | walk-forward 실행, `backtest_metric` 저장, 표 출력 |
+| `tomato backtest --models B1,B2,lgbm [--window full\|5y] [--horizons 3,7,21]` | walk-forward 실행, `backtest_metric` 저장, 표 출력 |
 | `tomato backtest import --model chronos2 --file …` | Colab 결과 가져오기 |
 | `tomato train --model lgbm` | 최신 데이터로 학습해 `model_version` 등록 |
 | `tomato predict [--origin YYYY-MM-DD]` | 3·7거래일 후 예측을 `forecast`에 저장 |
@@ -278,6 +292,7 @@ docker-compose.yml, Dockerfile
    - 기준선을 못 이기면 그대로 보고한다.
    - h = 3, 7을 각각 낸다.
    - 매입 시뮬레이션 표(§2)를 전체·급등 구간으로 낸다.
+   - B3를 모든 표에 싣는다. 오라클 절감액(h = 3, 7)을 낸다. h = 21을 시뮬레이션 없이 내고, DM 결과를 사전 등록 기준(α = 0.025)으로 판정한다.
 5. §2 선택 규칙으로 모델 1개를 고르고(B1일 수도 있음), 근거를 `docs/decisions.md`에 기록한다.
 6. `predict`와 `explain`이 최신 거래일 기준 예측과 설명을 만든다. 설명은 근거 검사를 통과하거나, 실패하면 템플릿 문장으로 대체된다.
 7. 대시보드 한 화면에 다음이 표시된다.
