@@ -155,7 +155,9 @@ def _save_reference(conn, name, horizon, b1_rows, score):
 
 
 def _fmt(m, key, spec, scale=1.0, sign=1):
-    return format(sign * scale * m[key]["value"], spec) if key in m else "—"
+    if key in m:
+        return format(sign * scale * m[key]["value"], spec)
+    return format("—", spec[0] + "".join(c for c in spec[1:].split(".")[0] if c.isdigit()))
 
 
 def _print_table(results):
