@@ -14,6 +14,7 @@ HORIZONS = (3, 7)  # 운영(predict)과 매입 시뮬레이션 대상
 SIM_HORIZONS = (3, 7)
 DM_HORIZONS = (21,)  # 사전 등록한 DM 검정 (spec §2, 본페로니 α = 0.025)
 DM_ALPHA = 0.05 / 2
+CHRONOS_DM_ALPHA = 0.05 / 3  # Chronos-2 vs LightGBM full, h = 3·7·21 전체 구간 (spec §2, 2026-11-10)
 WINDOWS = ("full", "5y")
 
 

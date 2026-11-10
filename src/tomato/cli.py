@@ -13,7 +13,7 @@ from tomato.config import load_settings
 from tomato.db import repo
 from tomato.evaluation import metrics, selection, simulation, walkforward
 from tomato.explain import template
-from tomato.models import baselines, lgbm
+from tomato.models import baselines, chronos2, lgbm
 
 YEAR_ROUND_FROM = dt.date(2002, 11, 1)
 
@@ -120,7 +120,7 @@ def cmd_predict(conn, args):
               f"({row['target_date_est']} 예상) {row['y_hat']:,} ({row['change_pct']:+.1f}%, {row['direction']})")
 
 
-def _save_backtest(conn, name, params, experiment, horizon, rows, b1_rows, simulate, dm=False):
+def _save_backtest(conn, name, params, experiment, horizon, rows, b1_rows, simulate, dm=False, chronos_dm=None):
     mv = repo.model_version_id(conn, name, params)
     repo.upsert_forecasts(conn, [{
         "model_version_id": mv, "experiment": experiment, "origin_date": r["origin_date"],
@@ -137,6 +137,17 @@ def _save_backtest(conn, name, params, experiment, horizon, rows, b1_rows, simul
             ms += dm_metrics
             notes.append(f"DM {seg}: 통계량 {info['stat']:.3f}, p {info['p']:.4f}, 커널 {info['kernel']},"
                          f" α {walkforward.DM_ALPHA} 기준 {'유의' if info['p'] < walkforward.DM_ALPHA else '유의하지 않음'}")
+        if chronos_dm:
+            lgbm_rows, base_rows = chronos_dm
+            for ref, ref_rows, suffix in (("LightGBM full", lgbm_rows, "_vs_lgbm"), ("B1", base_rows, "")):
+                dm_metrics, info = walkforward.score_dm(seg_rows, walkforward.segments(ref_rows)[seg], horizon)
+                ms += [{**m, "metric": m["metric"] + suffix} for m in dm_metrics]
+                judged = ref == "LightGBM full" and seg == "test_all"
+                verdict = (f"α {walkforward.CHRONOS_DM_ALPHA:.4f} 기준 "
+                           f"{'유의' if info['p'] < walkforward.CHRONOS_DM_ALPHA else '유의하지 않음'}"
+                           if judged else "참고(판정 대상 아님)")
+                notes.append(f"DM Chronos-2 vs {ref} {seg}: 통계량 {info['stat']:.3f}, p {info['p']:.4f},"
+                             f" 커널 {info['kernel']}, {verdict}")
         out[seg] = {m["metric"]: m for m in ms}
     _replace(conn, experiment, name, horizon, out)
     return out, notes
@@ -176,7 +187,7 @@ def _print_table(results):
 
 def cmd_backtest(conn, args):
     names = args.models.split(",")
-    known = (*baselines.MODELS, "lgbm")
+    known = (*baselines.MODELS, "lgbm", "chronos2")
     unknown = [n for n in names if n not in known]
     if unknown:
         sys.exit(f"지원 모델은 {', '.join(known)}입니다: {unknown}")
@@ -184,6 +195,14 @@ def cmd_backtest(conn, args):
     series = [(r.date, r.price) for r in daily]
     tuned = lgbm.load_params() if "lgbm" in names else None
     print(f"데이터 {daily[0].date} ~ {daily[-1].date}, {len(daily)}거래일")
+    chronos_preds, chronos_choice = {}, None
+    if "chronos2" in names:
+        chronos_choice = chronos2.load_choice()
+        pipe = chronos2.load_pipeline()
+        origins = chronos2.origin_indices(daily, walkforward.TEST_START)
+        for variant in sorted({chronos_choice[h]["selected_input"] for h in args.horizons.split(",")}):
+            print(f"Chronos-2 ({variant}) 예측 시점 {len(origins)}회 실행 중")
+            chronos_preds[variant] = chronos2.predict(pipe, daily, origins, variant)
 
     for h in _horizons(args.horizons):
         simulate = h in walkforward.SIM_HORIZONS
@@ -196,13 +215,20 @@ def cmd_backtest(conn, args):
                     params = tuned[str(h)][w]["params"]
                     all_rows[f"lgbm-{w}"] = (lgbm.backtest(daily, h, params, w), f"window={w}",
                                              {"horizon": h, "window": w, **params})
+            elif name == "chronos2":
+                variant = chronos_choice[str(h)]["selected_input"]
+                all_rows["chronos2"] = (chronos2.rows(daily, chronos_preds[variant], h, walkforward.TEST_START),
+                                        f"input={variant}", {"horizon": h, "input": variant, "revision": chronos2.REVISION})
             else:
                 all_rows[name] = (walkforward.backtest(series, baselines.MODELS[name], horizon=h), "window=full", {})
         walkforward.assert_same_origins({"B1": b1_rows, **{k: v[0] for k, v in all_rows.items()}})
         for label, (rows, experiment, params) in all_rows.items():
             dm = h in walkforward.DM_HORIZONS and label == f"lgbm-{selected}"
+            extra = None
+            if label == "chronos2" and f"lgbm-{selected}" in all_rows:
+                extra = (all_rows[f"lgbm-{selected}"][0], b1_rows)
             results[label], n = _save_backtest(conn, label.split("-")[0], params, experiment, h, rows, b1_rows,
-                                               simulate, dm)
+                                               simulate, dm, extra)
             notes += n
         results["B3"] = _save_reference(conn, "B3", h, b1_rows, lambda r: walkforward.score_b3(r, simulate))
         if simulate:
@@ -215,6 +241,8 @@ def cmd_backtest(conn, args):
             print(note)
         if tuned and "B2" in results:
             cand = {"B2": results["B2"], f"lgbm-{selected}": results[f"lgbm-{selected}"]}
+            if "chronos2" in results:
+                cand["chronos2"] = results["chronos2"]
             chosen, reasons = selection.select(
                 {k: {x: v["test_all"][x]["value"] for x in ("mae", "rel_mae", "dir_acc_ud")} for k, v in cand.items()}
             )
