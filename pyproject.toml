@@ -18,9 +18,18 @@ tomato = "tomato.cli:main"
 [dependency-groups]
 dev = ["pytest", "httpx"]
 eda = ["matplotlib==3.9.2"]  # scripts/eda_kamis.py
+chronos = ["chronos-forecasting==2.3.2", "torch>=2.2"]  # 4단계 Chronos-2 backtest. CPU용 torch
 
 [tool.uv]
 default-groups = ["dev", "eda"]
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [build-system]
 requires = ["hatchling"]
