@@ -1,0 +1,34 @@
+{
+  "3": {
+    "selected_input": "target",
+    "val_mae": {
+      "target": 1091.2259810554804,
+      "cov": 1111.336941813261
+    },
+    "val_n": 739
+  },
+  "7": {
+    "selected_input": "target",
+    "val_mae": {
+      "target": 1874.265306122449,
+      "cov": 1920.6272108843536
+    },
+    "val_n": 735
+  },
+  "21": {
+    "selected_input": "target",
+    "val_mae": {
+      "target": 3023.1026352288486,
+      "cov": 3139.478502080444
+    },
+    "val_n": 721
+  },
+  "meta": {
+    "model": "amazon/chronos-2",
+    "revision": "29ec3766d36d6f73f0696f85560a422f50e8498c",
+    "data_end": "2022-12-30",
+    "pred_len": 21,
+    "batch": 32,
+    "quantile": 0.5
+  }
+}
