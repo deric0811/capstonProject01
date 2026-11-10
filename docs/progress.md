@@ -12,7 +12,7 @@
 | Design | 완료 (`docs/spec.md` accepted) |
 | 구현 1단계: B1(직전가)으로 end-to-end | 완료: 수집·DB·B1 예측·템플릿 설명·대시보드·Docker. §11의 1·2·3번은 Docker, 7번은 로컬에서 확인 (`docs/research/stage1-check.md`) |
 | 구현 2단계: LightGBM·backtest(3·7거래일, 매입 시뮬레이션) | 완료 (`docs/research/stage2-backtest.md`). h = 3, 7 모두 LightGBM full 선택. `train`·`predict`·대시보드 연결 완료(대시보드·설명은 3거래일) |
-| 구현 3~4단계: LLM 설명(API) → Chronos-2(zero-shot) | 예정 |
+| 구현 3~5단계: LLM 설명(API) → Chronos-2(zero-shot) → LLM 증류 | 예정 (Chronos-2 진행 중) |
 | 3자 비교, 소매 | 예정 (intent MVP 순서 3~4) |
 | 현장 인터뷰·가치 가설 현장 검증 | 하지 않음 (일정 부족, `docs/decisions.md` 2026-11-05). 보고서에 한계 명시 |
 

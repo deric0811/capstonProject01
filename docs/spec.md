@@ -1,6 +1,6 @@
 # Spec: MVP 1순위, 도매 3·7거래일 후 end-to-end
 
-Status: accepted · Date: 2026-11-01 · 개정: 2026-11-05 (7거래일 평가, 매입 시뮬레이션, 범위 축소. 2단계 결과를 보기 전에 고정), 2026-11-09 (B3, 오라클 시뮬레이션, h = 21 사전 등록) · 근거: `intent/intent.md`(accepted v3.1), `docs/research/data-sources.md`, `docs/research/eda.md`
+Status: accepted · Date: 2026-11-01 · 개정: 2026-11-05 (7거래일 평가, 매입 시뮬레이션, 범위 축소. 2단계 결과를 보기 전에 고정), 2026-11-09 (B3, 오라클 시뮬레이션, h = 21 사전 등록), 2026-11-10 (시뮬레이션 표기 통일, LLM 증류 범위 복귀) · 근거: `intent/intent.md`(accepted v3.1), `docs/research/data-sources.md`, `docs/research/eda.md`
 
 > 표기: 표시 없는 항목은 결정된 것. **[미정]**은 아직 정하지 않은 것.
 > 범위: 수집 → 기준선 vs 후보 모델 → LLM 설명 → 대시보드 한 화면 + CLI → Docker. 소매·RAG·현장 테스트·3자 비교는 범위 밖. 7거래일은 평가와 `predict` 저장까지만 하고, 대시보드와 설명은 3거래일을 유지한다.
@@ -64,7 +64,8 @@ h별로 따로 적용한다. 기간마다 다른 모델이 뽑힐 수 있다.
 - 전략 B: 모델의 방향이 상승(예측 등락률 > +δ, δ = 3%)이면 t+1에 산다. 비용 y(t+1). 보합·하락이면 기간 마지막 날에 산다. 비용 y(t+h)
 - 지표 (h별, 모델별, 전체·급등 구간별. 구간은 예측 시점 t로 나눈다. 모든 모델에 같은 규칙)
   - 총 매입비 A, B (원)
-  - 차이(원) = B − A, 차이(%) = (B − A) / A × 100. 음수면 B가 싸다
+  - 절감액(원) = A − B, 절감(%) = (A − B) / A × 100. 양수면 B가 싸다
+  - 2026-11-10 개정: 보고 기준(A − B)으로 표기를 통일했다. 수치는 바뀌지 않는다. DB 저장값 `sim_diff_won`, `sim_diff_pct`는 B − A 그대로다(부호만 반대)
 - 한계
   - 기간이 겹치는 매입이라 관측이 독립이 아니다
   - 수수료·보관비·품질 변화는 넣지 않았다
@@ -103,7 +104,6 @@ h별로 따로 적용한다. 기간마다 다른 모델이 뽑힐 수 있다.
   - B3 계절 기준선: ŷ(t+3) = y(t) × 전년 같은 시기 3거래일 변화율
   - 요인 그룹 추가 실험: 가격만 → +반입량 → +기상(주산지 관측소), 같은 walk-forward로 비교. 반입량 출처·주산지는 `docs/research/data-sources.md`에서 조사 후 결정
   - Chronos-2 fine-tuning(Colab A100) vs zero-shot 비교
-  - LLM 증류 학습
 
 **Feature**: 모두 t 시점까지의 정보만 쓴다.
 
@@ -217,7 +217,7 @@ CREATE TABLE backtest_metric (
   horizon_tdays integer NOT NULL DEFAULT 3,
   model_name  text NOT NULL,
   segment     text NOT NULL,            -- 'test_all' | 'spike'
-  metric      text NOT NULL,            -- 'mae' | 'mape' | 'rel_mae' | 'dir_acc_ud' | 'dir_acc3' | 'rmse' | 'sim_cost_a' | 'sim_cost_b' | 'sim_diff_won' | 'sim_diff_pct' | 'dm_stat' | 'dm_p'  (B3·오라클은 model_name 'B3', 'oracle_opt', 'oracle_rule')
+  metric      text NOT NULL,            -- 'mae' | 'mape' | 'rel_mae' | 'dir_acc_ud' | 'dir_acc3' | 'rmse' | 'sim_cost_a' | 'sim_cost_b' | 'sim_diff_won'(B − A) | 'sim_diff_pct'(B − A) | 'dm_stat' | 'dm_p'  (B3·오라클은 model_name 'B3', 'oracle_opt', 'oracle_rule')
   value       numeric NOT NULL,
   n           integer NOT NULL,
   created_at  timestamptz NOT NULL DEFAULT now()
@@ -280,6 +280,7 @@ docker-compose.yml, Dockerfile
 2. **LightGBM + backtest**: B1·B2·LightGBM, h = 3·7, 학습 창 2종, 선택 규칙 적용, 매입 시뮬레이션
 3. **LLM 설명**: `llm.py`, 근거 검사, 템플릿 대체
 4. **Chronos-2** (Colab): 같은 예측 시점으로 예측 → `backtest import` → 선택 규칙 다시 적용
+5. **LLM 증류 학습**: Chronos-2 다음에 진행한다. 범위에 다시 넣었다(docs/decisions.md 2026-11-10). 선생·학생 모델은 별도 결정으로 정한다 [미정]
 
 ## 11. 완료 기준 (MVP 1순위)
 
