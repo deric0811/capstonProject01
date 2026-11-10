@@ -49,12 +49,25 @@ def cmd_collect_daily(conn, args):
     return _collect(conn, args.settings, "daily", end - dt.timedelta(days=args.days - 1), end)
 
 
-MODEL_LABELS = {"B1": "직전가(B1)", "B2": "최근 5거래일 평균(B2)", "lgbm": "LightGBM"}
+MODEL_LABELS = {"B1": "직전가(B1)", "B2": "최근 5거래일 평균(B2)", "lgbm": "LightGBM", "chronos2": "Chronos-2"}
 
 
 def metric_experiment(model, horizon):
-    """대시보드·설명에 쓸 backtest 지표의 실험 이름. LightGBM은 검증에서 고른 학습 창."""
-    return f"window={lgbm.selected(horizon)[0]}" if model == "lgbm" else "window=full"
+    """대시보드·설명에 쓸 backtest 지표의 실험 이름. LightGBM은 검증에서 고른 학습 창, Chronos-2는 검증에서 고른 입력."""
+    if model == "lgbm":
+        return f"window={lgbm.selected(horizon)[0]}"
+    if model == "chronos2":
+        return f"input={chronos2.load_choice()[str(horizon)]['selected_input']}"
+    return "window=full"
+
+
+def model_label(model, horizon):
+    label = MODEL_LABELS.get(model, model)
+    if model == "lgbm":
+        return f"{label} (학습 창 {lgbm.selected(horizon)[0]})"
+    if model == "chronos2":
+        return f"{label} (zero-shot)"
+    return label
 
 
 def _series(conn):
@@ -88,35 +101,74 @@ def cmd_train(conn, args):
         print(f"model_version {mv}: lgbm h={h} window={window}, 학습 {start} ~ {daily[-1].date}, {path}")
 
 
+OPS_MODELS = {3: "chronos2", 7: "chronos2"}  # 운영 모델 (docs/decisions.md 2026-11-10). 실패하면 LightGBM full
+
+
+def _lgbm_forecast(conn, daily, h):
+    t = daily[-1].date
+    mv = repo.latest_trained_model(conn, "lgbm", h)
+    if not mv:
+        raise RuntimeError(f"h={h} 학습 모델이 없습니다. 먼저 tomato train --model lgbm을 실행하세요.")
+    if t < mv["train_end"]:
+        raise RuntimeError(f"예측 시점 {t}이 학습 데이터 끝 {mv['train_end']}보다 앞섭니다(미래 라벨 사용).")
+    if not Path(mv["artifact_path"]).exists():
+        raise RuntimeError(f"모델 파일이 없습니다: {mv['artifact_path']}. tomato train을 다시 실행하세요.")
+    return mv["id"], "lgbm", lgbm.predict_last(lgb.Booster(model_file=mv["artifact_path"]), daily, h)
+
+
+def _chronos_forecast(conn, daily, h, cache):
+    """Chronos-2 zero-shot, 검증에서 고른 입력, 0.5 분위수. 파이프라인은 한 번만 로드한다."""
+    if "error" in cache:
+        raise cache["error"]
+    if "pipe" not in cache:
+        try:
+            cache["pipe"] = chronos2.load_pipeline()
+        except Exception as e:
+            cache["error"] = e
+            raise
+    variant = chronos2.load_choice()[str(h)]["selected_input"]
+    i = len(daily) - 1
+    y_hat = round(float(chronos2.predict(cache["pipe"], daily, [i], variant)[i][h - 1]))
+    mv = repo.model_version_id(conn, "chronos2", {"horizon": h, "input": variant, "revision": chronos2.REVISION})
+    return mv, "chronos2", y_hat
+
+
+def forecast_one(conn, daily, h, model, cache):
+    """(model_version_id, 실제로 쓴 모델, ŷ). Chronos-2가 실패하면 LightGBM full로 대체하고 사유를 stderr에 남긴다."""
+    if model == "chronos2":
+        try:
+            return _chronos_forecast(conn, daily, h, cache)
+        except Exception as e:  # noqa: BLE001 - 어떤 실패든 LightGBM으로 대체한다
+            print(f"[경고] h={h} Chronos-2 실패, LightGBM full로 대체: {type(e).__name__}: {e}", file=sys.stderr)
+            model = "lgbm"
+    if model == "lgbm":
+        return _lgbm_forecast(conn, daily, h)
+    y_hat = round(baselines.MODELS[model]([r.price for r in daily]))
+    return repo.model_version_id(conn, model, {}), model, y_hat
+
+
 def cmd_predict(conn, args):
     daily = _daily(conn, args.origin)
     if args.origin and daily[-1].date != args.origin:
         sys.exit(f"{args.origin}은 거래일(평균가 있는 날)이 아닙니다.")
     t, y0 = daily[-1].date, daily[-1].price
     holidays = cal.kr_holidays([t.year, t.year + 1])
-    rows = []
+    rows, used, cache = [], [], {}
     for h in _horizons(args.horizons):
-        if args.model == "lgbm":
-            mv = repo.latest_trained_model(conn, "lgbm", h)
-            if not mv:
-                sys.exit(f"h={h} 학습 모델이 없습니다. 먼저 tomato train --model lgbm을 실행하세요.")
-            if t < mv["train_end"]:
-                sys.exit(f"예측 시점 {t}이 학습 데이터 끝 {mv['train_end']}보다 앞섭니다(미래 라벨 사용).")
-            if not Path(mv["artifact_path"]).exists():
-                sys.exit(f"모델 파일이 없습니다: {mv['artifact_path']}. tomato train을 다시 실행하세요.")
-            y_hat = lgbm.predict_last(lgb.Booster(model_file=mv["artifact_path"]), daily, h)
-            mv_id = mv["id"]
-        else:
-            y_hat = round(baselines.MODELS[args.model]([r.price for r in daily]))
-            mv_id = repo.model_version_id(conn, args.model, {})
+        model = OPS_MODELS.get(h, "lgbm") if args.model == "ops" else args.model
+        try:
+            mv_id, name, y_hat = forecast_one(conn, daily, h, model, cache)
+        except RuntimeError as e:
+            sys.exit(str(e))
+        used.append(name)
         r = metrics.change(y0, y_hat)
         rows.append({
             "model_version_id": mv_id, "experiment": "live", "origin_date": t, "horizon_tdays": h,
             "target_date_est": cal.add_trading_days(t, h, holidays), "y_origin": y0, "y_hat": y_hat,
             "change_pct": round(100 * r, 3), "direction": metrics.direction(r), "is_backtest": False,
         })
-    for fid, row in zip(repo.upsert_forecasts(conn, rows), rows, strict=True):
-        print(f"forecast {fid}: {args.model}, t={t} y={y0:,} → {row['horizon_tdays']}거래일 후"
+    for fid, row, name in zip(repo.upsert_forecasts(conn, rows), rows, used, strict=True):
+        print(f"forecast {fid}: {name}, t={t} y={y0:,} → {row['horizon_tdays']}거래일 후"
               f"({row['target_date_est']} 예상) {row['y_hat']:,} ({row['change_pct']:+.1f}%, {row['direction']})")
 
 
@@ -307,7 +359,8 @@ def build_parser():
 
     pr = sub.add_parser("predict")
     pr.add_argument("--origin", type=date)
-    pr.add_argument("--model", choices=["lgbm", "B1", "B2"], default="lgbm")
+    pr.add_argument("--model", choices=["ops", "chronos2", "lgbm", "B1", "B2"], default="ops",
+                    help="ops = 운영 모델(h = 3·7 Chronos-2, 실패 시 LightGBM)")
     pr.add_argument("--horizons", default="3,7")
     pr.set_defaults(fn=cmd_predict)
 

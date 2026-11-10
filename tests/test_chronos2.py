@@ -103,3 +103,10 @@ def test_real_model_ignores_future_and_batch_mates(variant):
     np.testing.assert_array_equal(alone, chronos2.predict(pipe, changed, [i], variant)[i])
     batched = chronos2.predict(pipe, daily, list(range(i - 10, i + 22)), variant)[i]  # 뒤 시점과 같은 batch
     np.testing.assert_allclose(alone, batched, rtol=1e-4)
+
+
+def test_dockerfile_pins_same_revision():
+    from pathlib import Path
+    text = (Path(__file__).resolve().parent.parent / "Dockerfile").read_text()
+    assert f"CHRONOS_REVISION={chronos2.REVISION}" in text
+    assert "HF_HUB_OFFLINE=1" in text

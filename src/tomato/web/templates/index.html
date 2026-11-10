@@ -59,7 +59,8 @@
       {% else %}
       <p>{{ f.model_label }}: 직전가(B1) 대비 평균 오차 {{ "%.1f" | format((1 - p.rel_mae.value) * 100) }}% 감소
         (2023년 이후 {{ f.horizon_tdays }}거래일 후 평균 오차 {{ "{:,}".format(p.mae.value | round | int) }}원,
-        MAPE {{ "%.1f" | format(p.mape.value) }}%, 예측 {{ "{:,}".format(p.mae.n) }}회).</p>
+        MAPE {{ "%.1f" | format(p.mape.value) }}%, 예측 {{ "{:,}".format(p.mae.n) }}회).
+        {% if p.dm_p_vs_lgbm %}LightGBM과의 오차 차이는 통계적으로 유의하지 않습니다(DM p = {{ "%.2f" | format(p.dm_p_vs_lgbm.value) }}).{% endif %}</p>
       {% endif %}
     {% else %}
       <p>성능 지표 없음 (tomato backtest 실행 필요).</p>

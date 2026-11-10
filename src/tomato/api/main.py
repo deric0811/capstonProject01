@@ -33,9 +33,7 @@ def _latest(conn):
     if not f:
         return None
     m = repo.metrics_for(conn, f["model"], cli.metric_experiment(f["model"], f["horizon_tdays"]), horizon=f["horizon_tdays"])
-    label = cli.MODEL_LABELS.get(f["model"], f["model"])
-    if f["model"] == "lgbm":
-        label += f" (학습 창 {cli.metric_experiment('lgbm', f['horizon_tdays']).split('=')[1]})"
+    label = cli.model_label(f["model"], f["horizon_tdays"])
     return {
         "model_label": label,
         **{k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in f.items()},

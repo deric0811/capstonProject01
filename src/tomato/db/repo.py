@@ -168,7 +168,7 @@ def latest_forecast(conn, horizon=3):
     """대시보드·설명용 최신 예측. 기본은 h = 3."""
     row = conn.execute(
         _FORECAST_SELECT + " WHERE NOT f.is_backtest AND f.experiment = 'live' AND f.horizon_tdays = %s"
-        " ORDER BY f.origin_date DESC, f.id DESC LIMIT 1",
+        " ORDER BY f.origin_date DESC, f.created_at DESC, f.id DESC LIMIT 1",  # upsert는 id를 유지하고 created_at을 갱신한다
         (horizon,),
     ).fetchone()
     return dict(zip(_FORECAST_KEYS, row)) if row else None

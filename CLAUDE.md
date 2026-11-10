@@ -30,4 +30,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - DB 테스트: `TEST_DATABASE_URL=postgresql://… uv run pytest tests/test_api_db.py` (없으면 skip)
 - CLI: `uv run tomato db init | collect backfill|daily | train | predict | backtest --models B1,B2,lgbm --to 2026-11-04 | explain | show latest` (`DATABASE_URL` 필요). Docker: `docker compose run --rm app tomato <명령>`
 - LightGBM 튜닝(검증 구간만): `uv run python scripts/tune_lgbm.py` · 2단계 사후 분석: `uv run python scripts/posthoc_stage2.py`
+- Chronos-2(호스트): `uv run --group chronos …` (예: `scripts/chronos2_validate.py`, `tomato backtest --models …,chronos2`). 실제 모델 테스트: `CHRONOS_REAL=1 uv run --group chronos pytest tests/test_chronos2.py`
+- `predict` 기본은 운영 모델(h = 3·7 Chronos-2, 실패 시 LightGBM). Docker 이미지에 CPU torch와 Chronos-2 가중치가 들어 있고 실행 중에는 오프라인이다
 - 대시보드: `uv run uvicorn tomato.api.main:app`

@@ -61,3 +61,23 @@ def test_latest_forecast_filters_horizon_and_trained_model_lookup(conn):
         conn.execute("DELETE FROM forecast WHERE model_version_id IN"
                      " (SELECT id FROM model_version WHERE name = 'lgbm-test')")
         conn.execute("DELETE FROM model_version WHERE name = 'lgbm-test'")
+
+
+def test_latest_forecast_prefers_most_recent_run_on_same_origin(conn):
+    """대체(LightGBM) 예측 뒤 같은 날 Chronos-2로 다시 예측하면 Chronos-2가 최신이어야 한다(upsert는 id 유지)."""
+    import datetime as dt
+    a = repo.insert_trained_model(conn, "lgbm-test", {"horizon": 3}, dt.date(2002, 11, 1), dt.date(2099, 1, 1), "/x")
+    b = repo.model_version_id(conn, "chronos2-test", {"horizon": 3})
+    row = {"experiment": "live", "origin_date": dt.date(2099, 2, 1), "horizon_tdays": 3, "y_origin": 1,
+           "change_pct": 0, "direction": "flat", "is_backtest": False, "target_date_est": dt.date(2099, 2, 4)}
+    try:
+        [first] = repo.upsert_forecasts(conn, [{**row, "model_version_id": b, "y_hat": 1}])
+        repo.upsert_forecasts(conn, [{**row, "model_version_id": a, "y_hat": 2}])  # 대체
+        [again] = repo.upsert_forecasts(conn, [{**row, "model_version_id": b, "y_hat": 3}])  # 복구
+        assert again == first
+        latest = repo.latest_forecast(conn)
+        assert (latest["model"], latest["y_hat"]) == ("chronos2-test", 3)
+    finally:
+        conn.execute("DELETE FROM forecast WHERE model_version_id IN"
+                     " (SELECT id FROM model_version WHERE name IN ('lgbm-test', 'chronos2-test'))")
+        conn.execute("DELETE FROM model_version WHERE name IN ('lgbm-test', 'chronos2-test')")

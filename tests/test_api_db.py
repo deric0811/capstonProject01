@@ -33,3 +33,5 @@ def test_dashboard_has_required_elements(client):
     assert f["horizon_tdays"] == 3  # 대시보드는 3거래일
     if f["model"] == "lgbm":
         assert "LightGBM" in html and "직전가(B1) 대비 평균 오차" in html
+    if f["model"] == "chronos2":
+        assert "Chronos-2" in html and "직전가(B1) 대비 평균 오차" in html and "유의하지 않습니다" in html
