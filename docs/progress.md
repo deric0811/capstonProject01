@@ -13,7 +13,7 @@
 | 구현 1단계: B1(직전가)으로 end-to-end | 완료: 수집·DB·B1 예측·템플릿 설명·대시보드·Docker. §11의 1·2·3번은 Docker, 7번은 로컬에서 확인 (`docs/research/stage1-check.md`) |
 | 구현 2단계: LightGBM·backtest(3·7거래일, 매입 시뮬레이션) | 완료 (`docs/research/stage2-backtest.md`). h = 3, 7 모두 LightGBM full 선택. `train`·`predict`·대시보드 연결 완료(대시보드·설명은 3거래일) |
 | 구현 4단계: Chronos-2 zero-shot | 평가 완료 (`stage2-backtest.md`). h = 3, 7 Chronos-2 선택(LightGBM과 차이 유의하지 않음), h = 21 LightGBM 유지. 운영 모델 Chronos-2로 교체 완료(실패 시 LightGBM 대체, 외부망 차단에서도 동작) |
-| 구현 3·5단계: LLM 설명(API), LLM 증류 | 예정 |
+| 구현 3·5단계: LLM 설명(API), LLM 증류 | 준비 중. 구조 결정(선생 Qwen3.8-27B, 학생 HyperCLOVA X SEED 14B Think), 사전 확인(`docs/research/distill-precheck.md`), 근거 검사 강화, 입력 데이터(학습 5,036 / 평가 934), 평가 사전 등록(spec §6.1~6.3), Colab 노트북 4개 완료. Colab 실행은 2026-11-11부터. 4bit 형식 확인과 프롬프트 시험(Gemini 키 필요)이 남음 |
 | 3자 비교, 소매 | 예정 (intent MVP 순서 3~4) |
 | 현장 인터뷰·가치 가설 현장 검증 | 하지 않음 (일정 부족, `docs/decisions.md` 2026-11-05). 보고서에 한계 명시 |
 
@@ -76,7 +76,8 @@
   - 남은 일정은 약 12일이다.
   - 현장 검증을 하지 않으므로 효용은 매입 시뮬레이션으로만 간접 확인한다.
 - **다음 할 일**
-  - 3단계: LLM 설명(API) → 5단계: LLM 증류(선생·학생 모델 결정 필요)
+  - 증류: 4bit 형식 확인 → 프롬프트 시험(Gemini, `.env`에 `LLM_API_KEY`) → 묶음 업로드 → Colab 01~04 → `score_distill.py` → 채택 판정
+  - 데모 PC(RTX 3080 10GB): OS, 드라이버, Docker GPU 지원 확인
   - 향후 과제 후보: MAE 기반 선택 규칙과 매입 효용의 어긋남(h = 7)
   - 사전 등록 실험 결과 (`stage2-backtest.md`)
     - h = 21: LightGBM full 선택. 상대 MAE 0.79, DM 검정 유의(α = 0.025)

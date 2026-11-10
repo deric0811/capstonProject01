@@ -3,3 +3,4 @@ data/
 __pycache__/
 .venv/
 artifacts/
+tomato_distill_bundle.tar.gz
