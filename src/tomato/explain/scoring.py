@@ -1,7 +1,7 @@
 """증류 평가 지표와 채택 판정 (spec §6.3, 결과를 보기 전에 고정).
 
 - 분모는 평가 입력 전체(934개). 출력이 없는 입력은 모든 규칙에서 실패로 센다.
-- 통과율 = 근거 검사 pass(a and b and c) 비율. 규칙별 a·b·c와 형식 준수율을 따로 낸다.
+- 통과율 = 근거 검사 pass(a and b and c) 비율. 규칙별 a(a_numbers·a_median)·b·c와 형식 준수율을 따로 낸다.
 - 채택(2026-11-12 개정): (ii) LoRA 학생 통과율 >= 0.90 그리고 데모 서버(RTX 2080 Ti) batch 1 최대 VRAM
   (max_memory_reserved) <= 10GB(10 × 10⁹ 바이트)이면 explain에 학생을 쓴다.
   미달이면 API(BYOK) → 템플릿. 데모 측정이 아직 없으면 판정을 보류한다.
@@ -15,7 +15,7 @@ MODELS = ("student_base", "student_lora", "teacher")
 ADOPT_THRESHOLD = 0.90
 VRAM_LIMIT_GB = 10.0  # 10 × 10⁹ 바이트
 HUMAN_N, HUMAN_SEED = 30, 20261111
-RULES = ("pass", "a", "b", "c", "format")
+RULES = ("pass", "a", "a_numbers", "a_median", "b", "c", "format")  # a = a_numbers and a_median
 
 
 def score(inputs, outputs):

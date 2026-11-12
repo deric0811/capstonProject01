@@ -68,3 +68,10 @@ def test_demo_check_uses_three_fixed_training_inputs_only():
     recs = mod.check_inputs()
     assert len(recs) == 3 and all(r["split"] == "train" and r["id"] < "h3-2022" for r in recs)
     assert [r["id"] for r in mod.check_inputs()] == [r["id"] for r in recs]
+
+
+def test_pilot_is_fixed_training_only_and_eval_dtype_is_fp16(dc):
+    p = dc.pilot_subset()
+    assert len(p) == dc.N_PILOT == 50 and all(r["split"] == "train" for r in p)
+    assert [r["id"] for r in dc.pilot_subset()] == [r["id"] for r in p]
+    assert dc.EVAL_COMPUTE_DTYPE == "fp16"

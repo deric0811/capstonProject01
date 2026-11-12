@@ -56,7 +56,7 @@ NB["01_teacher_generate.ipynb"] = notebook([
     md(HEADER.format(
         title="01 선생 생성 (Qwen3.8-27B, vLLM)",
         gpu="A100 40GB → `Qwen3.8-27B-FP8`, A100 80GB → `Qwen3.8-27B` bf16 (자동 선택)",
-        time="약 1시간 (다운로드 15~20분, 학습·검증 3,200개와 재시도 20~30분, 평가 934개와 시간 측정 15분)",
+        time="약 1시간 10분 (다운로드 15~20분, 시범 50개 2분 + 확인, 학습·검증 3,200개와 재시도 20~30분, 평가 934개와 시간 측정 15분)",
         cu="약 13~15 CU", disk="가중치 29GB(FP8) 또는 56GB(bf16)",
         resume="출력은 256개마다 Drive `teacher/*.jsonl`에 이어 쓴다. 끊기면 처음부터 다시 실행하면 이미 있는 id는 건너뛴다.")),
     code(SETUP),
@@ -73,7 +73,7 @@ CT = {"enable_thinking": False}
 meta = {"teacher": TID, "revision": TREV, "gpu": torch.cuda.get_device_name(0), "gpu_gb": GB,
         "vllm": vllm.__version__, "prompt_version": prompt.PROMPT_VERSION, "sampling_train": dc.TEACHER_SAMPLING}
 print(meta)'''),
-    md("## 학습(2003~2021) 3,000개 + 검증(2022) 200개 생성, 근거 검사 실패는 seed를 바꿔 최대 2번 재생성"),
+    md("## 생성 함수"),
     code(r'''def id_seed(rid, attempt):
     return int(rid.split("-", 1)[1].replace("-", "")) + attempt * 100_000_000
 
@@ -97,8 +97,28 @@ def generate(recs, path, attempt, sampling, step=256):
 def ok(row):
     return row["pass"] and row["format"]
 
-train, val = dc.subsets()
-T = dc.DRIVE / "teacher"
+RULE_KEYS = ("pass", "format", "a", "a_numbers", "a_median", "b", "c")
+T = dc.DRIVE / "teacher"'''),
+    md("""## 시범 생성 (spec §6.1): 학습용 입력 50개(seed 20261113), 첫 시도만, 학습 설정의 샘플링
+- 첫 시도 통과율(전체·규칙별)과 실패 원문을 보고, 프롬프트를 고칠지 사용자가 정한다.
+- 고치면 repo에서 `PROMPT_VERSION`을 올리고 decisions에 기록한 뒤, 묶음을 다시 만들어 올리고 이 노트북을 처음부터 다시 실행한다.
+- 시범 출력은 학습에 쓰지 않는다."""),
+    code(r'''pilot = dc.pilot_subset()
+ppath = T / f"pilot_{prompt.PROMPT_VERSION}.jsonl"
+generate(pilot, ppath, 0, dc.TEACHER_SAMPLING)
+prows = dc.read_jsonl(ppath)
+meta["pilot"] = {"prompt_version": prompt.PROMPT_VERSION, "n": len(prows), **{k: sum(r[k] for r in prows) for k in RULE_KEYS}}
+print(json.dumps(meta["pilot"], ensure_ascii=False))
+for r in [r for r in prows if not ok(r)][:5]:
+    print("----", r["id"], r["errors"]); print(r["text"])'''),
+    md("## 프롬프트 고정: 시범 결과를 보고 고정할 버전을 적는다. 이 셀부터가 전체 생성이다"),
+    code(r'''FREEZE = None  # 시범 결과를 본 뒤 고정할 PROMPT_VERSION(예: "v2")을 넣는다
+assert FREEZE == prompt.PROMPT_VERSION, f"시범을 확인하고 FREEZE = {prompt.PROMPT_VERSION!r}로 고정한다"
+assert (T / f"pilot_{FREEZE}.jsonl").exists(), "이 버전의 시범 생성이 없다"
+meta["prompt_frozen"] = {"version": FREEZE, "at": time.strftime("%Y-%m-%d %H:%M:%S")}
+print(meta["prompt_frozen"])'''),
+    md("## 학습(2003~2021) 3,000개 + 검증(2022) 200개 생성, 근거 검사 실패는 seed를 바꿔 최대 2번 재생성"),
+    code(r'''train, val = dc.subsets()
 for name, recs in (("train", train), ("val", val)):
     remaining = recs
     for attempt in range(dc.MAX_RETRIES + 1):
@@ -122,7 +142,7 @@ for name, recs in (("train", train), ("val", val)):
     dc.append_jsonl(final, [best[r["id"]] for r in recs if r["id"] in best])
     a0 = dc.read_jsonl(T / f"{name}_a0.jsonl")
     summary[name] = {"n": len(recs), "first_try_pass": sum(ok(r) for r in a0), "final": len(best),
-                     **{k: sum(r[k] for r in a0) for k in ("a", "b", "c", "format")}}
+                     **{k: sum(r[k] for r in a0) for k in RULE_KEYS if k != "pass"}}
 meta["train_data"] = summary
 print(json.dumps(summary, ensure_ascii=False, indent=1))'''),
     md("## 평가 (iii) 선생: 평가 입력 934개, greedy, 재생성 없음"),
@@ -146,7 +166,7 @@ if not timing_path.exists():
 print(json.loads(timing_path.read_text())["mean_sec"])
 (dc.DRIVE / "teacher" / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1))'''),
     md("""## repo로 가져올 파일
-- `teacher/train_final.jsonl`, `teacher/val_final.jsonl`, `teacher/train_a*.jsonl`, `teacher/val_a*.jsonl`, `teacher/meta.json` → `distill/teacher/`
+- `teacher/pilot_*.jsonl`, `teacher/train_final.jsonl`, `teacher/val_final.jsonl`, `teacher/train_a*.jsonl`, `teacher/val_a*.jsonl`, `teacher/meta.json` → `distill/teacher/`
 - `eval/teacher.jsonl`, `eval/teacher_timing.json` → `distill/eval/`"""),
 ])
 
@@ -241,7 +261,7 @@ print(dc.dir_hashes(dst))'''),
 
 NB["03_merge_quantize.ipynb"] = notebook([
     md(HEADER.format(
-        title="03 merge(bf16) + 4bit 양자화 (배포본)",
+        title="03 merge(bf16) + 4bit 양자화 (배포본, 양자화하지 않는 가중치는 fp16)",
         gpu="A100 40GB 또는 80GB (bf16 14.7B 약 29.5GB가 GPU에 올라가야 함), 고용량 RAM",
         time="약 40분 (bf16 로드·merge 10분, 로컬 저장 30GB 10분, NF4 재로드·Drive 저장 9.6GB 15분)",
         cu="약 8~10 CU", disk="원본 59GB + merge bf16 30GB (Colab 로컬 디스크, Drive에는 NF4 9.6GB만)",
@@ -261,9 +281,11 @@ if not (OUT / "hashes.json").exists():
     merged.save_pretrained(LOCAL, safe_serialization=True)
     tok.save_pretrained(LOCAL)
     del base, merged; gc.collect(); torch.cuda.empty_cache()'''),
-    code(r'''# 2) NF4(이중 양자화)로 다시 읽어 4bit로 저장 → Drive. embedding·lm_head는 bf16으로 남는다(bitsandbytes 기본)
+    code(r'''# 2) NF4(이중 양자화)로 다시 읽어 4bit로 저장 → Drive. 데모 서버(2080 Ti)가 bf16을 지원하지 않으므로
+#    양자화하지 않는 가중치(embedding·lm_head·norm)와 계산 dtype은 fp16으로 저장한다(spec §6.2)
 if not (OUT / "hashes.json").exists():
-    q = AutoModelForCausalLM.from_pretrained(LOCAL, quantization_config=dc.bnb_config(), dtype=torch.bfloat16, device_map={"": 0})
+    q = AutoModelForCausalLM.from_pretrained(LOCAL, quantization_config=dc.bnb_config(dc.EVAL_COMPUTE_DTYPE),
+                                             dtype=dc.torch_dtype(dc.EVAL_COMPUTE_DTYPE), device_map={"": 0})
     q.save_pretrained(str(OUT), safe_serialization=True)
     AutoTokenizer.from_pretrained(LOCAL).save_pretrained(str(OUT))
     print("GPU 메모리(4bit 전체 GPU)", round(torch.cuda.memory_allocated() / 1e9, 2), "GB")
@@ -292,10 +314,9 @@ timing = dc.timing_subset(evals)
 E = dc.DRIVE / "eval"
 print(len(evals), len(timing))'''),
     md("## 배포 형식 그대로 로드 (NF4, embedding만 CPU), greedy, 사고 출력 끔 (skip_reasoning)\n"
-       "계산 dtype은 데모 서버에서 `scripts/demo_gpu_check.py`로 확인해 사용자가 정한 하나만 쓴다(spec §6.2). "
-       "정하기 전에는 아래 셀이 멈춘다."),
-    code(r'''COMPUTE_DTYPE = None  # [미정] spec §6.2: 데모 서버 확인 후 "fp16" 또는 "bf16"을 넣는다
-assert COMPUTE_DTYPE in dc.COMPUTE_DTYPES, "계산 dtype을 먼저 정한다 (spec §6.2)"
+       "계산 dtype은 fp16 하나로 (i)·(ii)를 평가한다(spec §6.2, 2026-11-12 확정. 데모 서버 RTX 2080 Ti는 bf16 미지원)."),
+    code(r'''COMPUTE_DTYPE = "fp16"  # spec §6.2 (2026-11-12 확정)
+assert COMPUTE_DTYPE == dc.EVAL_COMPUTE_DTYPE
 MODELS = [("student_base", dc.STUDENT_ID), ("student_lora", str(dc.DRIVE / "merged_nf4"))]
 for label, path in MODELS:
     tpath, gpath = E / f"{label}_timing.json", E / f"{label}.jsonl"

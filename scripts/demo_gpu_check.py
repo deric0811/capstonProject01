@@ -1,20 +1,27 @@
-"""데모 서버(RTX 2080 Ti 22GB) GPU 확인. spec §6.2 계산 dtype, §6.3 채택 기준 2(VRAM).
+"""데모 서버(RTX 2080 Ti 22GB, Turing sm_75) GPU 확인. spec §6.2 계산 dtype(fp16), §6.3 채택 기준 2(VRAM).
 
-uv 환경과 따로, 데모 서버에 CUDA용 가상환경을 만든다 (repo 루트에서):
-  python3 -m venv ~/hcx-venv && . ~/hcx-venv/bin/activate
-  pip install torch "transformers>=5.9.0" bitsandbytes accelerate
+호스트에는 venv·pip·apt 설치를 하지 않는다. 모든 실행은 Docker(--gpus all) 안에서 한다.
+HF 캐시(~/.cache/huggingface)와 결과 파일(~/tomato-demo-out, repo의 distill/eval/)은 볼륨으로 호스트에 남는다.
 
-1) 계산 dtype 확인 (평가 전, 사용자가 실행)
-   python scripts/demo_gpu_check.py --out ~/demo_dtype.json
-   - 학생 원본(revision 고정)을 배포 형식(NF4 이중 양자화 + embedding만 CPU)으로 올린다.
-     첫 실행 때 원본 약 59GB(fp32)를 내려받는다. dtype마다 다시 올린다.
-   - 학습용 입력(2003 ~ 2021) 3개를 seed 고정으로 뽑아 fp16, bf16으로 각각 batch 1 greedy 생성한다.
-   - dtype별로 NaN/inf 여부, 평균 생성 시간, 최대 VRAM(max_memory_reserved), 출력 앞부분을 출력한다.
-   - 이 결과로 사용자가 dtype 하나를 정한다. 평가 입력은 쓰지 않는다.
+repo 루트에서:
+  docker build -t tomato-demo-gpu deploy/demo-gpu
 
-2) 채택 기준 2: (ii) LoRA 학생 VRAM (Colab 04 뒤에)
-   python scripts/demo_gpu_check.py --timing --model <merged_nf4 경로> --dtype <정한 dtype>
-   - A100 시간 측정과 같은 평가 입력 50개를 batch 1로 생성해 distill/eval/student_lora_demo.json에 쓴다.
+1) fp16 확인 (평가 전): 학생 원본이 fp16으로 NaN/inf 없이 생성되는지
+  mkdir -p ~/.cache/huggingface ~/tomato-demo-out
+  docker run --rm --gpus all --user "$(id -u):$(id -g)" \
+    -v "$PWD":/repo -v ~/.cache/huggingface:/hf -v ~/tomato-demo-out:/out \
+    tomato-demo-gpu --out /out/demo_fp16.json
+  - 학생 원본(revision 고정)을 배포 형식(NF4 이중 양자화 + embedding만 CPU, fp16)으로 올린다.
+    첫 실행 때 원본 약 59GB(fp32)를 내려받는다.
+  - 학습용 입력(2003 ~ 2021) 3개를 seed 고정으로 뽑아 batch 1 greedy 생성한다.
+  - NaN/inf 여부, 평균 생성 시간, 최대 VRAM(max_memory_reserved), 출력 앞부분을 출력한다.
+  - NaN/inf가 나오면 로컬 배포 불가, API(BYOK)로 간다(spec §6.2).
+
+2) 채택 기준 2: (ii) LoRA 학생 VRAM (Colab 04 뒤에, merged_nf4를 서버로 옮긴 다음)
+  docker run --rm --gpus all --user "$(id -u):$(id -g)" \
+    -v "$PWD":/repo -v ~/.cache/huggingface:/hf -v <merged_nf4 경로>:/models/merged_nf4:ro \
+    tomato-demo-gpu --timing --model /models/merged_nf4
+  - A100 시간 측정과 같은 평가 입력 50개를 batch 1로 생성해 distill/eval/student_lora_demo.json에 쓴다.
 """
 import argparse
 import json
@@ -32,6 +39,8 @@ from tomato.explain import grounding, prompt  # noqa: E402
 
 SEED = 20261112
 N_CHECK = 3
+COMPUTE = "fp16"  # spec §6.2 (2026-11-12 확정). 2080 Ti는 bf16을 하드웨어로 지원하지 않으므로 bf16 경로는 없다
+REQUIRED_ARCH = "sm_75"
 
 
 def read(name):
@@ -53,15 +62,40 @@ def smi_used_gb():
         return None
 
 
-def run_dtype(model_path, compute, recs):
+def environment():
+    """torch 빌드와 GPU를 출력하고, sm_75를 지원하지 않는 빌드면 멈춘다."""
     import torch
 
-    res = {"compute_dtype": compute, "model": model_path, "rows": []}
+    info = {"torch": torch.__version__, "cuda_runtime": torch.version.cuda, "cuda_available": torch.cuda.is_available()}
+    for mod in ("transformers", "bitsandbytes", "accelerate"):
+        try:
+            info[mod] = __import__(mod).__version__
+        except Exception as e:
+            info[mod] = f"import 실패: {e}"
+    if not info["cuda_available"]:
+        print(json.dumps(info, ensure_ascii=False))
+        sys.exit("중단: CUDA GPU가 보이지 않는다. docker run에 --gpus all을 붙였는지, NVIDIA Container Toolkit이 동작하는지 확인한다.")
+    info["arch_list"] = torch.cuda.get_arch_list()
+    info["gpu"] = torch.cuda.get_device_name(0)
+    info["capability"] = ".".join(map(str, torch.cuda.get_device_capability(0)))
+    info["total_gb"] = round(torch.cuda.get_device_properties(0).total_memory / 1e9, 2)
+    print(json.dumps(info, ensure_ascii=False))
+    if REQUIRED_ARCH not in info["arch_list"]:
+        sys.exit(f"중단: 이 torch 빌드({info['torch']}, CUDA {info['cuda_runtime']})의 arch 목록에 {REQUIRED_ARCH}가 없다 "
+                 f"({info['arch_list']}). RTX 2080 Ti(Turing, 7.5)용 커널이 없으므로 sm_75를 포함한 torch 이미지로 바꾼다.")
+    return info
+
+
+def run_check(model_path, recs):
+    import torch
+
+    res = {"compute_dtype": COMPUTE, "model": model_path, "rows": []}
     try:
-        model, tok = dc.load_student(model_path, compute=compute)
-    except Exception as e:  # bf16을 지원하지 않으면 여기서 실패할 수 있다
+        model, tok = dc.load_student(model_path, compute=COMPUTE)
+    except Exception as e:
         return res | {"error": f"load: {type(e).__name__}: {e}"[:400]}
     res["cpu_modules"] = [k for k, v in model.hf_device_map.items() if v == "cpu"]
+    res["param_dtypes"] = sorted({str(p.dtype) for p in model.parameters()})
     torch.cuda.synchronize()
     torch.cuda.reset_peak_memory_stats()
     try:
@@ -76,12 +110,13 @@ def run_dtype(model_path, compute, recs):
             torch.cuda.synchronize()
             sec = time.time() - t0
             text = dc._clean(tok.decode(g[0, enc["input_ids"].shape[1]:], skip_special_tokens=False))
-            res["rows"].append({"id": r["id"], "sec": round(sec, 2), "new_tokens": int(g.shape[1] - enc["input_ids"].shape[1]),
-                                "text": text, "grounding_pass": grounding.check(text, r["input"])["pass"] if text else False})
+            res["rows"].append({"id": r["id"], "sec": round(sec, 2),
+                                "new_tokens": int(g.shape[1] - enc["input_ids"].shape[1]), "text": text,
+                                "grounding_pass": grounding.check(text, r["input"])["pass"] if text else False})
         res["max_reserved_gb"] = round(torch.cuda.max_memory_reserved() / 1e9, 2)
         res["max_allocated_gb"] = round(torch.cuda.max_memory_allocated() / 1e9, 2)
         res["nvidia_smi_used_gb"] = smi_used_gb()
-        # NaN/inf: VRAM을 잰 뒤, 마지막 생성 전체(프롬프트 + 출력)를 한 번 더 넣어 logits를 검사한다
+        # NaN/inf: VRAM을 잰 뒤, 프롬프트 + 생성 결과 전체를 한 번 더 넣어 logits를 검사한다
         nonfinite = 0
         for r, row in zip(recs, res["rows"]):
             enc = tok([dc.student_prompt(tok, prompt, r["input"]) + row["text"]],
@@ -91,39 +126,31 @@ def run_dtype(model_path, compute, recs):
             nonfinite += int((~torch.isfinite(logits)).any().item())
             del logits
         res["nan_or_inf_inputs"] = nonfinite
+        res["empty_outputs"] = sum(not x["text"] for x in res["rows"])
         res["mean_sec"] = round(sum(x["sec"] for x in res["rows"]) / len(res["rows"]), 2)
     except Exception as e:
         res["error"] = f"generate: {type(e).__name__}: {e}"[:400]
     del model
     torch.cuda.empty_cache()
+    res["fp16_ok"] = "error" not in res and res.get("nan_or_inf_inputs") == 0 and res.get("empty_outputs") == 0
     return res
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default=dc.STUDENT_ID, help="기본: 학생 원본(revision 고정). 또는 merged_nf4 경로")
-    ap.add_argument("--dtypes", default="fp16,bf16")
-    ap.add_argument("--out", type=Path, help="dtype 확인 결과 json (repo 밖)")
+    ap.add_argument("--out", type=Path, help="fp16 확인 결과 json (repo 밖, 예: /out/demo_fp16.json)")
     ap.add_argument("--timing", action="store_true", help="채택 기준 2: 평가 입력 50개 batch 1 VRAM")
-    ap.add_argument("--dtype", help="--timing에서 쓸 계산 dtype (spec §6.2에서 정한 값)")
     args = ap.parse_args()
 
-    import torch
-
-    if not torch.cuda.is_available():
-        sys.exit("CUDA GPU가 없다.")
-    gpu = torch.cuda.get_device_name(0)
-    print(f"GPU {gpu}, compute capability {torch.cuda.get_device_capability(0)}, "
-          f"torch.cuda.is_bf16_supported() = {torch.cuda.is_bf16_supported()}")
+    env = environment()
 
     if args.timing:
-        if args.dtype not in dc.COMPUTE_DTYPES:
-            sys.exit("--timing에는 --dtype fp16|bf16 (spec §6.2에서 정한 값)이 필요하다.")
         recs = dc.timing_subset(read("eval"))
-        model, tok = dc.load_student(args.model, compute=args.dtype)
+        model, tok = dc.load_student(args.model, compute=COMPUTE)
         t = dc.measure_latency(model, tok, prompt, recs)
-        t.update({"model": "student_lora", "path": args.model, "compute_dtype": args.dtype, "where": "demo_server",
-                  "nvidia_smi_used_gb": smi_used_gb(), "prompt_version": prompt.PROMPT_VERSION})
+        t.update({"model": "student_lora", "path": args.model, "compute_dtype": COMPUTE, "where": "demo_server",
+                  "nvidia_smi_used_gb": smi_used_gb(), "prompt_version": prompt.PROMPT_VERSION, "env": env})
         out = ROOT / "distill" / "eval" / "student_lora_demo.json"
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(t, ensure_ascii=False, indent=1) + "\n")
@@ -132,25 +159,22 @@ def main():
 
     if args.out and ROOT in args.out.resolve().parents:
         sys.exit("--out은 repo 밖이어야 한다.")
-    recs = check_inputs()
-    results = []
-    for compute in args.dtypes.split(","):
-        r = run_dtype(args.model, compute.strip(), recs)
-        r["gpu"] = gpu
-        results.append(r)
-        print(f"\n== {compute}")
-        if "error" in r:
-            print("  오류:", r["error"])
-        for k in ("nan_or_inf_inputs", "mean_sec", "max_reserved_gb", "max_allocated_gb", "nvidia_smi_used_gb", "cpu_modules"):
-            if k in r:
-                print(f"  {k}: {r[k]}")
-        for x in r["rows"]:
-            print(f"  {x['id']} {x['sec']}초 {x['new_tokens']}토큰 근거검사={x['grounding_pass']} | {x['text'][:100]!r}")
+    r = run_check(args.model, check_inputs()) | {"env": env}
+    print(f"\n== {COMPUTE}")
+    if "error" in r:
+        print("  오류:", r["error"])
+    for k in ("fp16_ok", "nan_or_inf_inputs", "empty_outputs", "mean_sec", "max_reserved_gb", "max_allocated_gb",
+              "nvidia_smi_used_gb", "cpu_modules", "param_dtypes"):
+        if k in r:
+            print(f"  {k}: {r[k]}")
+    for x in r["rows"]:
+        print(f"  {x['id']} {x['sec']}초 {x['new_tokens']}토큰 근거검사={x['grounding_pass']} | {x['text'][:100]!r}")
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(json.dumps(results, ensure_ascii=False, indent=1) + "\n")
+        args.out.write_text(json.dumps(r, ensure_ascii=False, indent=1) + "\n")
         print("\n저장:", args.out)
-    return 0
+    print("\n판정:", "fp16 사용 가능" if r["fp16_ok"] else "fp16 실패 → 로컬 배포 불가, API(BYOK)로 간다 (spec §6.2)")
+    return 0 if r["fp16_ok"] else 1
 
 
 if __name__ == "__main__":

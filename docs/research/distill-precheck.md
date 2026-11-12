@@ -106,7 +106,7 @@
   - Windows는 Docker Desktop의 WSL2 GPU 지원이 필요하다.
   - 확인 명령: `docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi`
 - 화면 출력에 3080을 함께 쓰는지도 확인한다. 함께 쓰면 VRAM 여유가 0.3~1GB 줄어든다.
-- GPU가 없는 환경에서는 `LLM_PROVIDER=auto`가 API 제공자(BYOK, `.env`의 `LLM_API_KEY`)로 대체하고, 키도 없으면 템플릿을 쓴다.
+- GPU가 없는 환경에서는 `LLM_PROVIDER=auto`가 API 제공자(BYOK, `.env`의 `GEMINI_API_KEY`, 2026-11-12에 `LLM_API_KEY`에서 이름 변경)로 대체하고, 키도 없으면 템플릿을 쓴다.
 
 ## 5. 근거 검사 (b) 금지어 목록의 한계
 - 목록(`explain/grounding.py` `FORBIDDEN`)

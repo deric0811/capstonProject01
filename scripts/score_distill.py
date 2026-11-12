@@ -36,9 +36,9 @@ def main():
               "decision": scoring.decide(summary, demo_vram)}
     (D / "eval" / "metrics.json").write_text(json.dumps(result, ensure_ascii=False, indent=1) + "\n")
 
-    print(f"{'모델':14} {'n':>4} {'통과':>6} {'(a)':>6} {'(b)':>6} {'(c)':>6} {'형식':>6} {'시간(초)':>8} {'VRAM(GB)':>8}")
+    print(f"{'모델':14} {'n':>4} " + " ".join(f"{k:>9}" for k in scoring.RULES) + f" {'시간(초)':>8} {'VRAM(GB)':>8}")
     for m, s in summary.items():
-        print(f"{m:14} {s['n']:>4} " + " ".join(f"{100 * s[k]:>5.1f}%" for k in scoring.RULES)
+        print(f"{m:14} {s['n']:>4} " + " ".join(f"{100 * s[k]:>8.1f}%" for k in scoring.RULES)
               + f" {s.get('mean_sec') or '—':>8} {s.get('max_reserved_gb') or '—':>8}")
     print(json.dumps(result["paired_pass"], ensure_ascii=False), json.dumps(result["decision"], ensure_ascii=False))
 

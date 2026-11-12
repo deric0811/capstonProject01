@@ -12,14 +12,16 @@ def test_template_is_default_and_api_needs_key(monkeypatch):
     monkeypatch.setattr(llm, "_local_alive", lambda s: False)
     assert llm.resolve({}) is None
     assert llm.resolve({"LLM_PROVIDER": "auto"}) is None  # GPU 서버도 키도 없으면 템플릿
-    s = llm.resolve({"LLM_PROVIDER": "auto", "LLM_API_KEY": "k-secret"})
+    s = llm.resolve({"LLM_PROVIDER": "auto", "GEMINI_API_KEY": "k-secret"})
     assert s.provider == "api" and "generativelanguage" in s.base_url
+    assert s.model == "gemini-3.1-flash-lite" and s.api_key == "k-secret"
+    assert llm.resolve({"LLM_PROVIDER": "auto", "LLM_API_KEY": "old-name"}) is None  # 예전 이름은 읽지 않는다
     assert "k-secret" not in repr(s)
 
 
 def test_auto_prefers_local_gpu_server(monkeypatch):
     monkeypatch.setattr(llm, "_local_alive", lambda s: True)
-    s = llm.resolve({"LLM_PROVIDER": "auto", "LLM_API_KEY": "k", "LLM_LOCAL_BASE_URL": "http://gpu:9000/v1/"})
+    s = llm.resolve({"LLM_PROVIDER": "auto", "GEMINI_API_KEY": "k", "LLM_LOCAL_BASE_URL": "http://gpu:9000/v1/"})
     assert s.provider == "local" and s.base_url == "http://gpu:9000/v1"
     assert s.extra == {"chat_template_kwargs": {"skip_reasoning": True}}  # 사고 출력 끔
     assert s.api_key == ""  # 사용자 키를 로컬 서버로 보내지 않는다

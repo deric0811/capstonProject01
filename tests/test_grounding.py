@@ -22,7 +22,49 @@ GOOD = (
 
 def test_good_text_passes_all_rules():
     r = grounding.check(GOOD, X)
-    assert r == {"pass": True, "a": True, "b": True, "c": True, "format": True, "errors": []}
+    assert r == {"pass": True, "a": True, "a_numbers": True, "a_median": True, "b": True, "c": True, "format": True,
+                 "errors": []}
+
+
+# (a) 계절 중앙값 표기 (2026-11-12 개정, 학습용 입력 시험에서 발견)
+@pytest.mark.parametrize("sent,ok", [
+    ("과거 11월 중앙값 16,250원보다 높습니다.", True),
+    ("과거 11월 평균 가격 16,250원보다 높습니다.", False),
+    ("11월 과거 가격 16,300원보다 높습니다.", False),        # 100원 반올림도 중앙값 금액으로 본다
+    ("11월의 과거 수준인 1만 6천 원보다 높습니다.", False),   # '만'·'천' 표기
+    ("현재가 17,900원은 높은 편입니다.", True),               # 중앙값이 아닌 금액
+])
+def test_median_label_required_in_sentence(sent, ok):
+    r = grounding.check_median_label(sent, X)
+    assert r[0] is ok, r
+
+
+def test_median_label_is_part_of_rule_a_and_counted_separately():
+    bad = GOOD.replace("과거 11월 중앙값 16,250원", "과거 11월 평균 가격 16,250원")
+    r = grounding.check(bad, X)
+    assert r["a_numbers"] and not r["a_median"] and not r["a"] and not r["pass"]
+    assert "중앙값" in " ".join(r["errors"])
+
+
+def test_median_label_skipped_when_null_or_ambiguous():
+    assert grounding.check_median_label("과거 평균 16,250원입니다.", X | {"seasonal": {"month": 11, "median": None,
+                                                                              "vs_median_pct": None}})[0]
+    # 중앙값이 현재가와 정확히 같으면 어느 값인지 알 수 없으므로 검사하지 않는다
+    same = X | {"seasonal": {"month": 11, "median": 17900, "vs_median_pct": 0.0}}
+    assert grounding.check_median_label("현재가는 17,900원입니다.", same)[0]
+
+
+# (a) 입력 JSON의 영문+숫자 식별자는 숫자 검사에서 뺀다 (2026-11-12 오탐 수정)
+def test_identifier_in_input_is_not_a_number():
+    assert grounding.identifiers(X) == {"chronos2"}
+    assert grounding.check_numbers("이 예측은 chronos2 모델로 만들었습니다.", X)[0]
+    assert grounding.check_numbers("이 예측은 chronos2모델로 만들었습니다.", X)[0]
+
+
+@pytest.mark.parametrize("text", ["chronos7 모델입니다.", "Chronos2 모델입니다.", "chronos22 모델입니다.", "gpt8 모델입니다.",
+                                  "x2 배입니다."])  # 7·8·22·2는 입력에 없는 숫자
+def test_identifier_exclusion_does_not_widen_other_numbers(text):
+    assert not grounding.check_numbers(text, X)[0]
 
 
 # (a) 숫자
@@ -121,6 +163,16 @@ def test_prompt_carries_input_and_rules():
     assert "4~6개" in m[0]["content"] and "틀릴 수" in m[0]["content"]
     for w in ("태풍", "날씨", "수입", "뉴스"):
         assert w in m[0]["content"]  # 금지어를 프롬프트로도 알린다
+
+
+def test_prompt_v2_rules():
+    sysm = prompt.SYSTEM
+    assert prompt.PROMPT_VERSION == "v2"
+    assert "별도의 문장" in sysm and "'유의' 또는 '참고'" in sysm
+    assert '반드시 "중앙값"' in sysm and '"평균"' in sysm
+    assert "model 값" in sysm and "쓰지 않는다" in sysm
+    # 성능 문장 지시는 v1과 같다
+    assert "performance가 null이면 모델 성능을 말하지 않는다." in sysm
 
 
 # 증류 평가 채점 (spec §6.3)

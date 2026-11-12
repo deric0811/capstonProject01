@@ -2,7 +2,10 @@
 
 제공자는 설정(.env 또는 환경변수)으로만 고른다. 둘 다 OpenAI 호환 chat completions로 부른다.
 - local: 데모 서버(RTX 2080 Ti 22GB)에서 띄운 학생 모델 서버. 사고(thinking) 출력은 skip_reasoning으로 끈다.
-- api:   GPU가 없는 환경의 대체. 사용자 키(BYOK, LLM_API_KEY)를 쓴다. 기본은 Gemini의 OpenAI 호환 주소.
+- api:   GPU가 없는 환경의 대체. 사용자 키(BYOK, .env의 GEMINI_API_KEY)를 쓴다. 기본은 Gemini의 OpenAI 호환 주소,
+         모델 gemini-3.1-flash-lite (gemini-2.5-flash는 새 사용자에게 제공 중단, 2026-11-12 확인).
+  주의: 사고(thinking) 토큰이 max_tokens 안에서 먼저 쓰이는 모델은 해설이 잘린다(gemini-3.5-flash는 512토큰에서 24자만 나옴).
+  모델을 바꾸면 한 번 호출해 출력 길이를 확인한다.
 - auto:  local 서버가 응답하면 local, 아니면 키가 있을 때 api, 둘 다 안 되면 None(템플릿 유지).
 키는 .env에서 읽고 출력하거나 파일에 쓰지 않는다. 오류 메시지에서도 가린다.
 """
@@ -18,7 +21,7 @@ from tomato import config
 DEFAULTS = {
     "local": {"base_url": "http://localhost:8081/v1", "model": "hyperclovax-seed-think-14b-tomato",
               "extra": {"chat_template_kwargs": {"skip_reasoning": True}}},
-    "api": {"base_url": "https://generativelanguage.googleapis.com/v1beta/openai", "model": "gemini-2.5-flash",
+    "api": {"base_url": "https://generativelanguage.googleapis.com/v1beta/openai", "model": "gemini-3.1-flash-lite",
             "extra": {}},
 }
 
@@ -45,7 +48,7 @@ def settings_for(provider, env=None):
         provider=provider,
         base_url=env.get(f"LLM_{p}_BASE_URL", d["base_url"]).rstrip("/"),
         model=env.get(f"LLM_{p}_MODEL", d["model"]),
-        api_key=env.get("LLM_API_KEY", "") if provider == "api" else env.get("LLM_LOCAL_API_KEY", ""),
+        api_key=env.get("GEMINI_API_KEY", "") if provider == "api" else env.get("LLM_LOCAL_API_KEY", ""),
         timeout=float(env.get("LLM_TIMEOUT", 60)),
         extra=d["extra"],
     )

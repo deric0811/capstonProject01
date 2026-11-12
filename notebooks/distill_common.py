@@ -28,6 +28,7 @@ TEACHERS = {  # GPU 메모리(GB) 기준. docs/research/distill-precheck.md §2
 TEACHER_SAMPLING = {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "max_tokens": 512}  # 학습 데이터 생성
 MAX_RETRIES = 2  # 근거 검사에 실패한 선생 출력은 seed를 바꿔 최대 2번 다시 생성
 N_TRAIN, N_VAL, N_TIMING = 3000, 200, 50
+N_PILOT, PILOT_SEED = 50, 20261113  # 선생 시범 생성 (spec §6.1): 학습용 입력 50개, 첫 시도만
 MAX_NEW_TOKENS = 512
 STOP_STRINGS = ["<|im_end|>", "<|endofturn|>", "<|stop|>"]
 LORA_GRID = {"r": 16, "alpha": 32, "dropout": 0.05, "lr": (1e-4, 2e-4), "epochs": 2,
@@ -56,6 +57,12 @@ def subsets():
     val = [r for r in recs if r["split"] == "val"]
     pick = lambda rs, n: sorted(rng.sample(rs, min(n, len(rs))), key=lambda r: r["id"])  # noqa: E731
     return pick(train, N_TRAIN), pick(val, N_VAL)
+
+
+def pilot_subset():
+    """선생 시범 생성용 학습용 입력(2003~2021) N_PILOT개. 시범 출력은 학습에 쓰지 않는다(전체 생성에서 다시 만든다)."""
+    recs = [r for r in load_inputs("train") if r["split"] == "train"]
+    return sorted(random.Random(PILOT_SEED).sample(recs, N_PILOT), key=lambda r: r["id"])
 
 
 def eval_inputs():
@@ -106,8 +113,9 @@ def gpu_gb():
 
 
 # ---------------- 학생 (transformers + bitsandbytes NF4) ----------------
-# 계산 dtype (spec §6.2). 학습·설정 선택(A100)은 bf16. 평가·배포는 데모 서버(RTX 2080 Ti) 확인 후 정한 하나 [미정].
+# 계산 dtype (spec §6.2). 학습·설정 선택(A100)은 bf16. 평가 (i)·(ii)와 배포는 fp16 (2026-11-12 확정, 2080 Ti는 bf16 미지원).
 COMPUTE_DTYPES = ("bf16", "fp16")
+EVAL_COMPUTE_DTYPE = "fp16"
 
 
 def torch_dtype(name):
