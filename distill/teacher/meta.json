@@ -1,0 +1,85 @@
+{
+ "teacher": "Qwen/Qwen3.8-27B",
+ "revision": "37561816e66b5b9153b1b64c10968c18c1e6f4a0",
+ "gpu": "NVIDIA A100-SXM4-80GB",
+ "gpu_gb": 85,
+ "vllm": "0.33.0",
+ "prompt_version": "v5",
+ "sampling_train": {
+  "temperature": 0.7,
+  "top_p": 0.8,
+  "top_k": 20,
+  "max_tokens": 512
+ },
+ "pilot": {
+  "prompt_version": "v5",
+  "seed20261113": {
+   "n": 50,
+   "pass": 50,
+   "format": 50,
+   "a": 50,
+   "a_numbers": 50,
+   "a_median": 50,
+   "b": 50,
+   "c": 50,
+   "c_caution": 50,
+   "perf_caution": 0
+  },
+  "seed20261115": {
+   "n": 50,
+   "pass": 50,
+   "format": 50,
+   "a": 50,
+   "a_numbers": 50,
+   "a_median": 50,
+   "b": 50,
+   "c": 50,
+   "c_caution": 50,
+   "perf_caution": 0
+  },
+  "합계": {
+   "n": 100,
+   "pass": 100,
+   "format": 100,
+   "a": 100,
+   "a_numbers": 100,
+   "a_median": 100,
+   "b": 100,
+   "c": 100,
+   "c_caution": 100,
+   "perf_caution": 0
+  }
+ },
+ "prompt_frozen": {
+  "version": "v5",
+  "at": "2026-11-12 18:46:37"
+ },
+ "train_data": {
+  "train": {
+   "n": 3000,
+   "first_try_pass": 2976,
+   "final": 2994,
+   "format": 2986,
+   "a": 2989,
+   "a_numbers": 2989,
+   "a_median": 3000,
+   "b": 3000,
+   "c": 2983,
+   "c_caution": 2989,
+   "perf_caution": 0
+  },
+  "val": {
+   "n": 200,
+   "first_try_pass": 200,
+   "final": 200,
+   "format": 200,
+   "a": 200,
+   "a_numbers": 200,
+   "a_median": 200,
+   "b": 200,
+   "c": 200,
+   "c_caution": 200,
+   "perf_caution": 0
+  }
+ }
+}

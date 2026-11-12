@@ -2,7 +2,29 @@
 
 # 진행 현황: 토마토 가격 예측 + LLM 설명 (캡스톤디자인 2)
 
-갱신: 2026-11-10 · 마감: 2026-11-17경 · 1인 개발
+갱신: 2026-11-13 · 마감: 2026-11-17경 · 1인 개발
+
+## 0. 다음 세션이 먼저 볼 것 (2026-11-13)
+- **지금 상태**: 프롬프트 v5 고정(2026-11-12 18:46:37, 선생 시범 100/100). Colab 01 완료(선생 `Qwen3.8-27B` bf16, A100 80GB). 학습 데이터 2,994/3,000, 검증 200/200, 평가 (iii) 선생 934개 생성. 결과 파일은 `distill/teacher/`, `distill/eval/teacher.jsonl`·`teacher_timing.json`. 자세한 수치는 `docs/decisions.md` 2026-11-13 "선생 생성 완료".
+  - `distill/eval/teacher.jsonl`은 평가 출력이다. 04가 끝나기 전에는 내용을 보거나 채점하지 않는다. 채점은 세 모델을 한꺼번에(`scripts/score_distill.py`).
+  - 노트북과 Colab 묶음(sha256 `591fa13a…625a`)은 바꾸지 않는다(02 실행 중).
+- **Colab 02 (QLoRA) 실행 중.** 끝나면 Drive에서 가져올 것
+  - `lora/selection.json`, 각 설정의 `log_history.json`, `val_gen_ep*.jsonl` → `distill/lora/`
+  - `lora/chosen/`(adapter_config.json, adapter_model.safetensors) → `distill/lora/chosen/`. adapter는 100MB를 넘을 수 있어 GitHub push 전에 크기를 보고 Git LFS 또는 Drive 보관 + 해시 기록을 정한다.
+- **03 (merge + NF4) 사용자 할 일**: A100(40GB/80GB 모두 가능, 고용량 RAM), 약 40분. 실행 뒤 `merged_nf4/hashes.json`만 → `distill/merged_nf4_hashes.json`. 가중치 9.6GB는 Drive에 두고, 데모 서버 VRAM 측정을 위해 `merged_nf4/` 폴더를 데모 서버로 내려받는다.
+- **04 (평가 (i)·(ii)) 사용자 할 일**: A100, 약 1.5~2시간. 실행 뒤 `eval/student_base.jsonl`, `eval/student_lora.jsonl`, `eval/*_timing.json` → `distill/eval/`.
+- **04 뒤 순서**: 데모 서버 VRAM 측정(`scripts/demo_gpu_check.py --timing --model …/merged_nf4`, Docker만) → `score_distill.py`로 세 모델 채점 → 채택 판정(spec §6.3) → 사람 점검.
+- **사람 점검 60개 절차** (spec §6.3, 채택 판정에는 쓰지 않음)
+  1. 04 결과를 `distill/eval/`에 둔 뒤 `uv run python scripts/human_review.py make` → `distill/eval/human/review.csv`(모델 가림, 60행 섞음), `key.csv`(정답).
+  2. `key.csv`는 점검이 끝날 때까지 열지 않는다.
+  3. `review.csv`의 `사실_오류`·`근거없는_원인`·`어색한_문장` 칸에 오류 개수(없으면 0), `메모`에 내용을 적는다(Excel에서 열 때 utf-8-sig).
+  4. `uv run python scripts/human_review.py merge` → `distill/eval/human/summary.json`.
+- **VRAM**: 원본 학생(배포 형식, fp16)이 데모 서버에서 학습용 입력 3개로 max_reserved 11.23GB였다. 채택 기준 2(10GB 이하)는 바꾸지 않는다. `expandable_segments`도 쓰지 않는다. (ii)가 10GB를 넘으면 기준대로 학생 미채택(API → 템플릿). 사후 결정(데모를 22GB 서버에서 로컬로 시연할지)은 **미정**.
+- **데모 서버 확인 예정**: 원본 학생을 프롬프트 v5로 다시 돌려 번호 목록("1. … 2. …")을 쓰는지 본다. repo를 pull한 뒤 `scripts/demo_gpu_check.py` 맨 위의 fp16 확인 명령 그대로(프롬프트는 repo의 v5를 읽는다).
+- **미확인 원인**
+  - 40GB A100에서 FP8판 선생(`Qwen3.8-27B-FP8`)이 로드되지 않은 원인. 01은 80GB bf16으로 끝났으므로 다시 쓸 일은 없다.
+  - 01 학습 생성 첫 묶음 맨 앞 14개가 입력을 못 받은 것처럼 깨진 출력을 낸 원인(재생성으로 모두 통과, 최종 데이터에는 없음).
+- **사용자 확인이 필요할 수 있는 것**: 근거 검사는 예상가격이 현재가와 같은(diff 0) 입력에서 "동일"이라고 쓰면 "현재가와 차이 없음"으로 실패시킨다. 학습 데이터에서는 이런 입력 3개가 모두 빠졌다. 평가 채점 전에 검사기를 그대로 둘지 정한다(바꾸면 사전 등록 변경이므로 결과 보기 전에 기록).
 
 ## 1. 현재 단계
 | 단계 | 상태 |
@@ -13,7 +35,7 @@
 | 구현 1단계: B1(직전가)으로 end-to-end | 완료: 수집·DB·B1 예측·템플릿 설명·대시보드·Docker. §11의 1·2·3번은 Docker, 7번은 로컬에서 확인 (`docs/research/stage1-check.md`) |
 | 구현 2단계: LightGBM·backtest(3·7거래일, 매입 시뮬레이션) | 완료 (`docs/research/stage2-backtest.md`). h = 3, 7 모두 LightGBM full 선택. `train`·`predict`·대시보드 연결 완료(대시보드·설명은 3거래일) |
 | 구현 4단계: Chronos-2 zero-shot | 평가 완료 (`stage2-backtest.md`). h = 3, 7 Chronos-2 선택(LightGBM과 차이 유의하지 않음), h = 21 LightGBM 유지. 운영 모델 Chronos-2로 교체 완료(실패 시 LightGBM 대체, 외부망 차단에서도 동작) |
-| 구현 3·5단계: LLM 설명(API), LLM 증류 | 준비 중. 구조 결정(선생 Qwen3.8-27B, 학생 HyperCLOVA X SEED 14B Think), 사전 확인(`docs/research/distill-precheck.md`), 근거 검사 강화, 입력 데이터(학습 5,036 / 평가 934), 평가 사전 등록(spec §6.1~6.3), Colab 노트북 4개 완료. Colab 실행은 2026-11-11부터. 4bit 형식 확인과 프롬프트 시험(Gemini 키 필요)이 남음 |
+| 구현 3·5단계: LLM 설명(API), LLM 증류 | 진행 중. API 해설(Gemini `gemini-3.1-flash-lite`) 연결 완료. 증류: 데모 서버 fp16 확인 통과, 프롬프트 v5 고정, Colab 01(선생 생성) 완료, 02(QLoRA) 실행 중 |
 | 3자 비교, 소매 | 예정 (intent MVP 순서 3~4) |
 | 현장 인터뷰·가치 가설 현장 검증 | 하지 않음 (일정 부족, `docs/decisions.md` 2026-11-05). 보고서에 한계 명시 |
 
@@ -73,12 +95,12 @@
   - 2020년 이후 변동이 커져 기준선을 못 이길 수 있다. 그 경우 그대로 보고한다.
   - 참여 시장 수가 바뀌면 평균의 구성이 달라진다.
   - 공휴일 누락으로 예상 날짜가 틀릴 수 있다.
-  - 남은 일정은 약 12일이다.
+  - 남은 일정은 약 4일이다.
   - 현장 검증을 하지 않으므로 효용은 매입 시뮬레이션으로만 간접 확인한다.
 - **다음 할 일**
-  - 증류: 프롬프트 v4 시험(Gemini A 25개) → 데모 서버 fp16 확인(Docker, `scripts/demo_gpu_check.py`) → 묶음 업로드 → Colab 01(시범 100개 → 프롬프트 고정 → 전체) → 02~04 → 데모 서버 VRAM 측정(`--timing`) → `score_distill.py` → 채택 판정 → 사람 점검(`human_review.py`, (i)·(ii) 가림)
+  - 증류: ~~프롬프트 시험 → 데모 서버 fp16 확인 → Colab 01~~(완료) → 02(실행 중) → 03 → 04 → 데모 서버 VRAM 측정(`--timing`) → `score_distill.py` → 채택 판정 → 사람 점검(`human_review.py`, (i)·(ii) 가림). 위 0절 참고
     - 확정(2026-11-12): 4bit 형식 NF4 + embedding CPU, 계산 dtype fp16. 채택 = 통과율 ≥ 90% 그리고 데모 서버 VRAM ≤ 10GB. 미달이면 API(BYOK) → 템플릿
-  - 데모 서버(~~RTX 3080 10GB~~ RTX 2080 Ti 22GB 개조, 2026-11-12 정정): OS, 드라이버, Docker GPU 지원 확인
+  - 데모 서버(~~RTX 3080 10GB~~ RTX 2080 Ti 22GB 개조, 2026-11-12 정정): Docker GPU 지원과 fp16 확인 완료(2026-11-13)
   - 범위 제외: 해설 꼬리질문(대화형). 향후 과제
   - 향후 과제 후보: MAE 기반 선택 규칙과 매입 효용의 어긋남(h = 7)
   - 사전 등록 실험 결과 (`stage2-backtest.md`)
