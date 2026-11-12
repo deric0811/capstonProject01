@@ -81,6 +81,14 @@ def read_jsonl(path):
         return [json.loads(line) for line in f if line.strip()]
 
 
+def check_prompt_version(path, version):
+    """이어 쓰는 파일에 다른 프롬프트 버전의 출력이 있으면 멈춘다(예전 실행의 남은 파일)."""
+    bad = {r.get("prompt_version") for r in read_jsonl(path)} - {version}
+    if bad:
+        raise RuntimeError(f"{Path(path).name}에 프롬프트 {sorted(map(str, bad))}의 출력이 있다(지금 {version}). "
+                           "예전 실행의 파일이므로 Drive에서 지우고 다시 실행한다.")
+
+
 def done_ids(path):
     return {r["id"] for r in read_jsonl(path)}
 
@@ -180,6 +188,8 @@ def student_generate(model, tok, prompt_mod, recs, batch_size=16, out_path=None,
     """greedy 생성. out_path가 있으면 batch마다 이어 쓰고, 이미 있는 id는 건너뛴다."""
     import torch
 
+    if out_path:
+        check_prompt_version(out_path, prompt_mod.PROMPT_VERSION)
     done = done_ids(out_path) if out_path else set()
     todo = [r for r in recs if r["id"] not in done]
     out = []
@@ -192,7 +202,7 @@ def student_generate(model, tok, prompt_mod, recs, batch_size=16, out_path=None,
             gen = model.generate(**enc, do_sample=False, max_new_tokens=MAX_NEW_TOKENS, use_cache=True,
                                  stop_strings=STOP_STRINGS, tokenizer=tok, pad_token_id=tok.pad_token_id)
         sec = time.time() - t0
-        rows = [{"id": r["id"], "text": _clean(tok.decode(g[enc["input_ids"].shape[1]:], skip_special_tokens=False)),
+        rows = [{"id": r["id"], "prompt_version": prompt_mod.PROMPT_VERSION, "text": _clean(tok.decode(g[enc["input_ids"].shape[1]:], skip_special_tokens=False)),
                  "batch_sec": round(sec, 2), "batch_size": len(chunk)} for r, g in zip(chunk, gen)]
         if out_path:
             append_jsonl(out_path, rows)

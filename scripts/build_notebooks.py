@@ -11,14 +11,27 @@ drive.mount("/content/drive")
 import os, sys, json, time, gc
 DIR = "/content/drive/MyDrive/tomato-distill"
 os.environ["TOMATO_DISTILL_DIR"] = DIR
-if not os.path.exists(f"{DIR}/bundle/notebooks/distill_common.py"):
-    os.makedirs(f"{DIR}/bundle", exist_ok=True)
-    !tar xzf {DIR}/tomato_distill_bundle.tar.gz -C {DIR}/bundle
+# 묶음은 실행할 때마다 새로 푼다(예전 묶음이 남아 다른 프롬프트로 도는 것을 막는다). sha256을 repo에서 만든 값과 비교한다
+import shutil, hashlib
+shutil.rmtree(f"{DIR}/bundle", ignore_errors=True)
+os.makedirs(f"{DIR}/bundle")
+!tar xzf {DIR}/tomato_distill_bundle.tar.gz -C {DIR}/bundle
+with open(f"{DIR}/tomato_distill_bundle.tar.gz", "rb") as f:
+    print("bundle sha256", hashlib.sha256(f.read()).hexdigest())
 sys.path.insert(0, f"{DIR}/bundle/notebooks")
 import distill_common as dc
 prompt = dc.setup()
 from tomato.explain import grounding
 !nvidia-smi --query-gpu=name,memory.total --format=csv'''
+
+
+SHUTDOWN = r'''# 끝: Drive에 다 쓴 뒤 런타임을 끈다(끝난 뒤 GPU가 켜진 채 컴퓨팅 단위를 쓰지 않게).
+# 앞 셀에서 오류로 멈추면 이 셀은 실행되지 않는다. 그때는 직접 런타임 > 런타임 연결 해제 및 삭제.
+AUTO_SHUTDOWN = True
+if AUTO_SHUTDOWN:
+    drive.flush_and_unmount()
+    from google.colab import runtime
+    runtime.unassign()'''
 
 
 def md(text):
@@ -78,6 +91,7 @@ print(meta)'''),
     return int(rid.split("-", 1)[1].replace("-", "")) + attempt * 100_000_000
 
 def generate(recs, path, attempt, sampling, step=256):
+    dc.check_prompt_version(path, prompt.PROMPT_VERSION)
     done = dc.done_ids(path)
     todo = [r for r in recs if r["id"] not in done]
     for k in range(0, len(todo), step):
@@ -89,7 +103,7 @@ def generate(recs, path, attempt, sampling, step=256):
         rows = []
         for r, o in zip(chunk, outs):
             text = o.outputs[0].text.strip()
-            rows.append({"id": r["id"], "split": r["split"], "attempt": attempt, "text": text,
+            rows.append({"id": r["id"], "split": r["split"], "attempt": attempt, "prompt_version": prompt.PROMPT_VERSION, "text": text,
                          "batch_sec": round(sec, 2), **grounding.check(text, r["input"])})
         dc.append_jsonl(path, rows)
         print(f"{path.name} {len(done) + k + len(chunk)}/{len(recs)} ({sec:.0f}초)", flush=True)
@@ -168,6 +182,7 @@ print(json.loads(timing_path.read_text())["mean_sec"])
     md("""## repo로 가져올 파일
 - `teacher/pilot_*.jsonl`, `teacher/train_final.jsonl`, `teacher/val_final.jsonl`, `teacher/train_a*.jsonl`, `teacher/val_a*.jsonl`, `teacher/meta.json` → `distill/teacher/`
 - `eval/teacher.jsonl`, `eval/teacher_timing.json` → `distill/eval/`"""),
+    code(SHUTDOWN),
 ])
 
 NB["02_qlora_train.ipynb"] = notebook([
@@ -257,6 +272,7 @@ print(dc.dir_hashes(dst))'''),
 - `lora/selection.json`, 각 설정의 `log_history.json`, `val_gen_ep*.jsonl` → `distill/lora/`
 - `lora/chosen/`(adapter_config.json, adapter_model.safetensors) → `distill/lora/chosen/`
   - r 16, 모든 linear 대상이면 adapter 파라미터가 약 6,100만 개라 파일이 약 120MB(bf16)~250MB(fp32)다. GitHub의 파일당 100MB 제한을 넘으므로 push할 때는 Git LFS를 쓰거나 Drive에 두고 해시만 기록한다."""),
+    code(SHUTDOWN),
 ])
 
 NB["03_merge_quantize.ipynb"] = notebook([
@@ -297,6 +313,7 @@ if not (OUT / "hashes.json").exists():
 print((OUT / "hashes.json").read_text())'''),
     md("""## repo로 가져올 파일
 - `merged_nf4/hashes.json`만 → `distill/merged_nf4_hashes.json`. 가중치(약 9.6GB)는 Drive에 둔다."""),
+    code(SHUTDOWN),
 ])
 
 NB["04_evaluate.ipynb"] = notebook([
@@ -342,6 +359,7 @@ for label in ("student_base", "student_lora", "teacher"):
 - `eval/student_base.jsonl`, `eval/student_lora.jsonl`, `eval/*_timing.json` → `distill/eval/`
 - `merged_nf4/`를 데모 서버로 옮겨 `scripts/demo_gpu_check.py --timing`으로 VRAM을 잰다(채택 기준 2, spec §6.3).
 - 그다음 repo에서 `uv run python scripts/score_distill.py`를 실행한다."""),
+    code(SHUTDOWN),
 ])
 
 
