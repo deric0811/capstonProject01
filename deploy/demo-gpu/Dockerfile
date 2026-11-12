@@ -6,7 +6,12 @@
 FROM pytorch/pytorch:2.10.0-cuda12.8-cudnn9-runtime
 
 # transformers 5.9.0 이상이 HyperCLOVAX-SEED-Think-14B를 지원한다. 설치된 버전은 스크립트가 시작할 때 출력한다.
-RUN pip install --no-cache-dir "transformers>=5.9.0,<6" "bitsandbytes>=0.46" "accelerate>=1.6"
+# 이 이미지의 Python은 PEP 668(externally-managed) 표시가 있어 컨테이너 안에서만 --break-system-packages로 설치한다.
+# 이미지에 든 torch(CUDA 12.8 빌드)가 바뀌지 않게 그 버전으로 묶는다.
+RUN python -c "import torch; print('torch==' + torch.__version__.split('+')[0])" > /tmp/torch-pin.txt && cat /tmp/torch-pin.txt \
+ && pip install --no-cache-dir --break-system-packages -c /tmp/torch-pin.txt \
+    "transformers>=5.9.0,<6" "bitsandbytes>=0.46" "accelerate>=1.6" \
+ && python -c "import torch, transformers, bitsandbytes, accelerate; print('torch', torch.__version__, torch.version.cuda, 'transformers', transformers.__version__, 'bnb', bitsandbytes.__version__)"
 
 ENV HF_HOME=/hf \
     HOME=/tmp \
