@@ -65,6 +65,15 @@ HEADER = """# {title}
 
 NB = {}
 
+# 02~04의 라이브러리 버전 고정 (2026-11-13). Colab의 `pip install -U`가 받던 최신판과 같고, 이 버전의 설치 소스에서
+# 노트북·distill_common.py의 모든 호출 인자를 대조했다. 데모 서버 이미지의 transformers도 5.22.2다.
+PINS = {"transformers": "5.22.2", "peft": "0.21.2", "bitsandbytes": "0.50.2", "accelerate": "1.15.0"}
+PIP = ("!pip install -q " + " ".join(f'"{k}=={v}"' for k, v in PINS.items()) + "\n"
+       + "import importlib.metadata as _md\n"
+       + f"PINS = {PINS!r}\n"
+       + "assert {k: _md.version(k) for k in PINS} == PINS, {k: _md.version(k) for k in PINS}\n"
+       + "print(PINS)")
+
 NB["01_teacher_generate.ipynb"] = notebook([
     md(HEADER.format(
         title="01 선생 생성 (Qwen3.8-27B, vLLM)",
@@ -221,15 +230,23 @@ NB["02_qlora_train.ipynb"] = notebook([
         cu="약 40~45 CU", disk="학생 원본 float32 59GB",
         resume="Trainer 체크포인트(epoch마다)를 Drive `lora/`에 저장하고, 다시 실행하면 마지막 체크포인트에서 이어 한다. 검증 생성도 이어 쓴다.")),
     code(SETUP),
-    code(r'''!pip install -q -U "transformers>=5.9.0" peft bitsandbytes accelerate
-import torch, transformers, peft, bitsandbytes
-print(transformers.__version__, peft.__version__, bitsandbytes.__version__)'''),
+    code(PIP + r'''
+import torch, transformers, peft, bitsandbytes'''),
+    md("""## SMOKE: 본 실행 전에 전 과정을 작게 확인
+- `SMOKE = True`: 학습 32개·검증 8개, 학습률 1e-4 하나로 학습(2 epoch, epoch당 2 step) → 체크포인트 → 검증 생성 → 근거 검사 → 설정 선택 → `chosen` 저장까지 돈다. 결과는 Drive `lora_smoke/`에 쓰고 본 실행의 `lora/`는 건드리지 않는다. 학생 원본 다운로드(첫 실행 약 15분) 뒤 모델 로드 3번과 생성으로 수 분이 걸린다.
+- 확인이 끝나면 `SMOKE = False`로 바꾸고 처음부터 다시 실행한다. 학습 설정(spec §6.2)은 SMOKE와 본 실행이 같고, 데이터 수와 학습률 개수만 다르다."""),
+    code(r'''SMOKE = True  # 본 실행은 False
+LORA_DIR = dc.DRIVE / ("lora_smoke" if SMOKE else "lora")
+print("SMOKE" if SMOKE else "본 실행", LORA_DIR)'''),
     md("## 데이터: 선생 출력 중 근거 검사·형식 통과분 (01에서 만든 `*_final.jsonl`)"),
     code(r'''train_in, val_in = dc.subsets()
 inputs = {r["id"]: r["input"] for r in train_in + val_in}
 train_t = dc.read_jsonl(dc.DRIVE / "teacher" / "train_final.jsonl")
 val_t = dc.read_jsonl(dc.DRIVE / "teacher" / "val_final.jsonl")
-print(len(train_t), len(val_t))
+if SMOKE:
+    train_t, val_in = train_t[:32], val_in[:8]
+    val_t = [r for r in val_t if r["id"] in {x["id"] for x in val_in}]
+print(len(train_t), len(val_t), len(val_in))
 from transformers import AutoTokenizer
 tok = AutoTokenizer.from_pretrained(dc.STUDENT_ID, revision=dc.STUDENT_REV)
 tok.padding_side = "right"
@@ -240,7 +257,7 @@ print(tok.decode(train_ds[0]["input_ids"])[-600:])'''),
     md("## 학습: r 16, alpha 32, 학습률 {1e-4, 2e-4} × epoch {1, 2} (epoch마다 체크포인트)"),
     code(r'''from transformers import AutoModelForCausalLM, Trainer, TrainingArguments, DataCollatorForSeq2Seq
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-import glob
+import glob, math
 
 def load_base():
     m = AutoModelForCausalLM.from_pretrained(dc.STUDENT_ID, revision=dc.STUDENT_REV, quantization_config=dc.bnb_config(),
@@ -248,29 +265,42 @@ def load_base():
     return prepare_model_for_kbit_training(m, use_gradient_checkpointing=True)
 
 G = dc.LORA_GRID
-for lr in G["lr"]:
-    out = dc.DRIVE / "lora" / f"r{G['r']}_lr{lr:g}"
+LRS = G["lr"][:1] if SMOKE else G["lr"]
+for lr in LRS:
+    out = LORA_DIR / f"r{G['r']}_lr{lr:g}"
     if (out / "done").exists():
         continue
     model = get_peft_model(load_base(), LoraConfig(r=G["r"], lora_alpha=G["alpha"], lora_dropout=G["dropout"],
                                                    target_modules=G["targets"], task_type="CAUSAL_LM"))
     args = TrainingArguments(output_dir=str(out), num_train_epochs=G["epochs"], learning_rate=lr,
                              per_device_train_batch_size=4, gradient_accumulation_steps=4, per_device_eval_batch_size=8,
-                             lr_scheduler_type="cosine", warmup_ratio=0.03, bf16=True, logging_steps=10,
+                             lr_scheduler_type="cosine", warmup_steps=0.03, bf16=True, logging_steps=10,
                              eval_strategy="epoch", save_strategy="epoch", save_total_limit=None, seed=dc.SEED,
                              gradient_checkpointing=True, optim="paged_adamw_8bit", report_to="none")
+    # warmup 3%(spec §6.2): transformers 5.x는 warmup_ratio를 없앴고, warmup_steps에 1보다 작은 소수를 주면
+    # 전체 step × 0.03을 올림한 step 수로 쓴다(TrainingArguments.get_warmup_steps, 예전 warmup_ratio와 같은 계산).
+    # 전체 step 계산은 Trainer.set_initial_training_values와 같다(batch 수 → 누적 단위 올림 → × epoch).
+    n_batches = math.ceil(len(train_ds) / args.per_device_train_batch_size)
+    steps_per_epoch = math.ceil(n_batches / args.gradient_accumulation_steps)
+    total_steps = math.ceil(args.num_train_epochs * steps_per_epoch)
+    steps = {"n_train": len(train_ds), "steps_per_epoch": steps_per_epoch, "total_steps": total_steps,
+             "warmup_steps": args.get_warmup_steps(total_steps), "warmup_spec": 0.03}
+    print(f"lr {lr:g}:", steps)
     trainer = Trainer(model=model, args=args, train_dataset=train_ds, eval_dataset=val_ds,
                       data_collator=DataCollatorForSeq2Seq(tok, padding=True, label_pad_token_id=-100))
     ckpts = sorted(glob.glob(f"{out}/checkpoint-*"), key=lambda p: int(p.rsplit("-", 1)[1]))
     trainer.train(resume_from_checkpoint=ckpts[-1] if ckpts else None)
+    assert trainer.state.max_steps == total_steps, (trainer.state.max_steps, total_steps)
+    print(f"lr {lr:g}: 실제 전체 step {trainer.state.max_steps}, warmup {args.get_warmup_steps(trainer.state.max_steps)}")
+    (out / "steps.json").write_text(json.dumps(steps, indent=1))
     (out / "log_history.json").write_text(json.dumps(trainer.state.log_history, indent=1))
     (out / "done").write_text("ok")
     del model, trainer; gc.collect(); torch.cuda.empty_cache()'''),
     md("## 설정 선택: 검증(2022) 200개 greedy 생성의 근거 검사 통과율(a·b·c), 동률이면 검증 손실이 낮은 쪽, 그다음 작은 학습률·적은 epoch"),
     code(r'''from peft import PeftModel
 results = []
-for lr in G["lr"]:
-    out = dc.DRIVE / "lora" / f"r{G['r']}_lr{lr:g}"
+for lr in LRS:
+    out = LORA_DIR / f"r{G['r']}_lr{lr:g}"
     hist = json.loads((out / "log_history.json").read_text())
     evals = [h for h in hist if "eval_loss" in h]
     ckpts = sorted(glob.glob(f"{out}/checkpoint-*"), key=lambda p: int(p.rsplit("-", 1)[1]))
@@ -287,17 +317,19 @@ for lr in G["lr"]:
                         "val_format": sum(c["format"] for c in checks) / len(checks),
                         "val_loss": evals[ep - 1]["eval_loss"]})
 chosen = sorted(results, key=lambda x: (-x["val_pass"], x["val_loss"], x["lr"], x["epoch"]))[0]
-sel = {"grid": {k: v for k, v in G.items()}, "results": results, "chosen": chosen, "n_train": len(train_ds), "n_val": len(val_in)}
-(dc.DRIVE / "lora" / "selection.json").write_text(json.dumps(sel, indent=1, default=str))
+sel = {"grid": {k: v for k, v in G.items()}, "results": results, "chosen": chosen, "n_train": len(train_ds), "n_val": len(val_in),
+       "smoke": SMOKE, "versions": PINS}
+(LORA_DIR / "selection.json").write_text(json.dumps(sel, indent=1, default=str))
 print(json.dumps(sel, indent=1, default=str))'''),
     code(r'''# 고른 어댑터만 lora/chosen/에 복사하고 해시를 남긴다
 import shutil
-dst = dc.DRIVE / "lora" / "chosen"
+dst = LORA_DIR / "chosen"
 shutil.rmtree(dst, ignore_errors=True)
 shutil.copytree(chosen["checkpoint"], dst, ignore=shutil.ignore_patterns("optimizer.pt", "scheduler.pt", "rng_state*", "trainer_state.json", "training_args.bin"))
 print(dc.dir_hashes(dst))'''),
     md("""## repo로 가져올 파일
-- `lora/selection.json`, 각 설정의 `log_history.json`, `val_gen_ep*.jsonl` → `distill/lora/`
+- 본 실행(`SMOKE = False`)만 가져온다. `lora_smoke/`는 가져오지 않는다.
+- `lora/selection.json`, 각 설정의 `log_history.json`·`steps.json`, `val_gen_ep*.jsonl` → `distill/lora/`
 - `lora/chosen/`(adapter_config.json, adapter_model.safetensors) → `distill/lora/chosen/`
   - r 16, 모든 linear 대상이면 adapter 파라미터가 약 6,100만 개라 파일이 약 120MB(bf16)~250MB(fp32)다. GitHub의 파일당 100MB 제한을 넘으므로 push할 때는 Git LFS를 쓰거나 Drive에 두고 해시만 기록한다."""),
     code(SHUTDOWN),
@@ -311,18 +343,26 @@ NB["03_merge_quantize.ipynb"] = notebook([
         cu="약 8~10 CU", disk="원본 59GB + merge bf16 30GB (Colab 로컬 디스크, Drive에는 NF4 9.6GB만)",
         resume="Drive `merged_nf4/hashes.json`이 있으면 끝난 것이다. 중간에 끊기면 처음부터 다시 한다.")),
     code(SETUP),
-    code(r'''!pip install -q -U "transformers>=5.9.0" peft bitsandbytes accelerate
+    code(PIP + r'''
 import torch, shutil
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from peft import PeftModel
-OUT = dc.DRIVE / "merged_nf4"
-LOCAL = "/content/merged_bf16"'''),
+from peft import PeftModel'''),
+    md("""## SMOKE: 본 실행 전에 전 과정을 작게 확인
+- `SMOKE = True`: 02 SMOKE의 `lora_smoke/chosen` 어댑터로, 학생 원본의 앞 2개 층만 올려 merge → 로컬 저장 → NF4(fp16) 재로드 → Drive 저장 → 해시까지 돈다. 결과는 Drive `merged_nf4_smoke/`(04 SMOKE가 읽음). 본 실행의 `merged_nf4/`는 건드리지 않는다.
+- 층을 줄인 것은 시간 때문이다. 호출하는 API와 순서는 본 실행과 같고, 디스크·RAM 용량은 확인하지 못한다. 학생 원본 다운로드(첫 실행 약 15분)는 필요하다.
+- 확인이 끝나면 `SMOKE = False`로 바꾸고 처음부터 다시 실행한다."""),
+    code(r'''SMOKE = True  # 본 실행은 False
+ADAPTER = dc.DRIVE / ("lora_smoke" if SMOKE else "lora") / "chosen"
+OUT = dc.DRIVE / ("merged_nf4_smoke" if SMOKE else "merged_nf4")
+LOCAL = "/content/merged_bf16_smoke" if SMOKE else "/content/merged_bf16"
+LAYERS = {"num_hidden_layers": 2} if SMOKE else {}  # SMOKE만: 앞 2개 층만 올린다
+print("SMOKE" if SMOKE else "본 실행", ADAPTER, "→", OUT)'''),
     code(r'''# 1) bf16 원본에 LoRA merge → 로컬 디스크에 저장
 if not (OUT / "hashes.json").exists():
-    base = AutoModelForCausalLM.from_pretrained(dc.STUDENT_ID, revision=dc.STUDENT_REV, dtype=torch.bfloat16, device_map={"": 0})
+    base = AutoModelForCausalLM.from_pretrained(dc.STUDENT_ID, revision=dc.STUDENT_REV, dtype=torch.bfloat16, device_map={"": 0}, **LAYERS)
     tok = AutoTokenizer.from_pretrained(dc.STUDENT_ID, revision=dc.STUDENT_REV)
-    merged = PeftModel.from_pretrained(base, str(dc.DRIVE / "lora" / "chosen")).merge_and_unload()
-    merged.save_pretrained(LOCAL, safe_serialization=True)
+    merged = PeftModel.from_pretrained(base, str(ADAPTER)).merge_and_unload()
+    merged.save_pretrained(LOCAL)  # transformers 5.x는 항상 safetensors로 저장한다(safe_serialization 인자 없음)
     tok.save_pretrained(LOCAL)
     del base, merged; gc.collect(); torch.cuda.empty_cache()'''),
     code(r'''# 2) NF4(이중 양자화)로 다시 읽어 4bit로 저장 → Drive. 데모 서버(2080 Ti)가 bf16을 지원하지 않으므로
@@ -330,17 +370,18 @@ if not (OUT / "hashes.json").exists():
 if not (OUT / "hashes.json").exists():
     q = AutoModelForCausalLM.from_pretrained(LOCAL, quantization_config=dc.bnb_config(dc.EVAL_COMPUTE_DTYPE),
                                              dtype=dc.torch_dtype(dc.EVAL_COMPUTE_DTYPE), device_map={"": 0})
-    q.save_pretrained(str(OUT), safe_serialization=True)
+    print("저장할 계산 dtype", q.config.quantization_config.bnb_4bit_compute_dtype, "| 층 수", q.config.num_hidden_layers)
+    q.save_pretrained(str(OUT))
     AutoTokenizer.from_pretrained(LOCAL).save_pretrained(str(OUT))
     print("GPU 메모리(4bit 전체 GPU)", round(torch.cuda.memory_allocated() / 1e9, 2), "GB")
     del q; gc.collect(); torch.cuda.empty_cache()
     hashes = dc.dir_hashes(OUT)
     (OUT / "hashes.json").write_text(json.dumps({"source": dc.STUDENT_ID, "revision": dc.STUDENT_REV,
-                                                 "adapter": dc.dir_hashes(dc.DRIVE / "lora" / "chosen"),
+                                                 "adapter": dc.dir_hashes(ADAPTER), "smoke": SMOKE,
                                                  "files": hashes}, indent=1))
 print((OUT / "hashes.json").read_text())'''),
     md("""## repo로 가져올 파일
-- `merged_nf4/hashes.json`만 → `distill/merged_nf4_hashes.json`. 가중치(약 9.6GB)는 Drive에 둔다."""),
+- 본 실행(`SMOKE = False`)만: `merged_nf4/hashes.json`만 → `distill/merged_nf4_hashes.json`. 가중치(약 9.6GB)는 Drive에 둔다. `merged_nf4_smoke/`는 가져오지 않는다."""),
     code(SHUTDOWN),
 ])
 
@@ -352,23 +393,35 @@ NB["04_evaluate.ipynb"] = notebook([
         cu="약 20~25 CU", disk="학생 원본 59GB(캐시) + Drive NF4 9.6GB",
         resume="생성은 batch마다 Drive `eval/*.jsonl`에 이어 쓰고, 시간 측정은 json이 있으면 건너뛴다.")),
     code(SETUP),
-    code(r'''!pip install -q -U "transformers>=5.9.0" peft bitsandbytes accelerate
-import torch
-evals = dc.eval_inputs()
-timing = dc.timing_subset(evals)
-E = dc.DRIVE / "eval"
-print(len(evals), len(timing))'''),
+    code(PIP + r'''
+import torch'''),
+    md("""## SMOKE: 본 실행 전에 전 과정을 작게 확인
+- `SMOKE = True`: 평가 입력은 쓰지 않고 **검증(2022) 입력 4개**로 (i) 학생 원본과 (ii) 03 SMOKE의 `merged_nf4_smoke/`(앞 2개 층만 있는 모델이라 출력은 의미 없음)를 배포 형식으로 올려 시간 측정(2개) → 생성 → 근거 검사까지 돈다. 결과는 Drive `eval_smoke/`. 본 실행의 `eval/`는 건드리지 않는다.
+- 확인이 끝나면 `SMOKE = False`로 바꾸고 처음부터 다시 실행한다."""),
+    code(r'''SMOKE = True  # 본 실행은 False
+if SMOKE:
+    evals = dc.subsets()[1][:4]  # 검증 입력(2022). 평가 입력은 읽지 않는다
+    timing = evals[:2]
+    E = dc.DRIVE / "eval_smoke"
+    LORA_MODEL = dc.DRIVE / "merged_nf4_smoke"
+else:
+    evals = dc.eval_inputs()
+    timing = dc.timing_subset(evals)
+    E = dc.DRIVE / "eval"
+    LORA_MODEL = dc.DRIVE / "merged_nf4"
+print("SMOKE" if SMOKE else "본 실행", len(evals), len(timing), E)'''),
     md("## 배포 형식 그대로 로드 (NF4, embedding만 CPU), greedy, 사고 출력 끔 (skip_reasoning)\n"
        "계산 dtype은 fp16 하나로 (i)·(ii)를 평가한다(spec §6.2, 2026-11-12 확정. 데모 서버 RTX 2080 Ti는 bf16 미지원)."),
     code(r'''COMPUTE_DTYPE = "fp16"  # spec §6.2 (2026-11-12 확정)
 assert COMPUTE_DTYPE == dc.EVAL_COMPUTE_DTYPE
-MODELS = [("student_base", dc.STUDENT_ID), ("student_lora", str(dc.DRIVE / "merged_nf4"))]
+MODELS = [("student_base", dc.STUDENT_ID), ("student_lora", str(LORA_MODEL))]
 for label, path in MODELS:
     tpath, gpath = E / f"{label}_timing.json", E / f"{label}.jsonl"
     if tpath.exists() and len(dc.read_jsonl(gpath)) >= len(evals):
         continue
     model, tok = dc.load_student(path, compute=COMPUTE_DTYPE)
-    print(label, "device map 확인:", {k: v for k, v in model.hf_device_map.items() if v == "cpu"})
+    print(label, "device map 확인:", {k: v for k, v in model.hf_device_map.items() if v == "cpu"},
+          "| 계산 dtype", model.config.quantization_config.bnb_4bit_compute_dtype)
     if not tpath.exists():
         t = dc.measure_latency(model, tok, prompt, timing)
         t.update({"model": label, "path": path, "prompt_version": prompt.PROMPT_VERSION, "compute_dtype": COMPUTE_DTYPE})
@@ -378,13 +431,13 @@ for label, path in MODELS:
     del model; gc.collect(); torch.cuda.empty_cache()'''),
     code(r'''# 빠른 확인용 통과율. 최종 지표는 repo의 scripts/score_distill.py로 계산한다.
 inputs = {r["id"]: r["input"] for r in evals}
-for label in ("student_base", "student_lora", "teacher"):
+for label in ("student_base", "student_lora") if SMOKE else ("student_base", "student_lora", "teacher"):
     rows = dc.read_jsonl(E / f"{label}.jsonl")
     if rows:
         cs = [grounding.check(r["text"], inputs[r["id"]]) for r in rows]
         print(label, len(rows), "pass", round(sum(c["pass"] for c in cs) / len(cs), 3))'''),
     md("""## repo로 가져올 파일
-- `eval/student_base.jsonl`, `eval/student_lora.jsonl`, `eval/*_timing.json` → `distill/eval/`
+- 본 실행(`SMOKE = False`)만: `eval/student_base.jsonl`, `eval/student_lora.jsonl`, `eval/*_timing.json` → `distill/eval/`. `eval_smoke/`는 가져오지 않는다.
 - `merged_nf4/`를 데모 서버로 옮겨 `scripts/demo_gpu_check.py --timing`으로 VRAM을 잰다(채택 기준 2, spec §6.3).
 - 그다음 repo에서 `uv run python scripts/score_distill.py`를 실행한다."""),
     code(SHUTDOWN),

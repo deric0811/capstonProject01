@@ -352,3 +352,18 @@
 - 평가 (iii) 선생: 평가 입력 934개 greedy 생성 완료(`distill/eval/teacher.jsonl`). 채점은 04 뒤에 세 모델을 한꺼번에 한다.
   - 평균 생성 시간 7.12초(평가 입력 50개, batch 1, vLLM, A100 80GB). nvidia-smi 74.15GB는 vLLM이 미리 잡은 메모리라 학생과 비교하지 않는다.
 - 노트북 로그 끝의 `1405`는 값이 아니다. 마지막 셀의 마지막 줄 `(…/meta.json).write_text(…)`가 돌려준 쓴 글자 수(1,405자)를 Jupyter가 출력한 것이다(파일은 1,409바이트).
+
+## 2026-11-13: Colab 02 실패(transformers 5.x), 라이브러리 버전 고정, SMOKE (사용자 지시, 학습 설정 변경 없음)
+- 증상: 02가 학습 전에 `TrainingArguments.__init__() got an unexpected keyword argument 'warmup_ratio'`로 멈췄다. 노트북이 `pip install -U "transformers>=5.9.0"`로 최신판(5.22.2)을 받았고, 5.x에서 `warmup_ratio`가 없어졌다.
+- 대조: transformers 5.22.2, peft 0.21.2, bitsandbytes 0.50.2, accelerate 1.15.0(2026-11-13 PyPI 최신, 데모 서버 이미지와 같은 transformers)의 설치 소스에서 02·03·04와 `distill_common.py`의 호출 인자를 확인했다. TrainingArguments, Trainer, DataCollatorForSeq2Seq, LoraConfig·get_peft_model·prepare_model_for_kbit_training·PeftModel.from_pretrained·merge_and_unload, BitsAndBytesConfig, from_pretrained, save_pretrained, generate, init_empty_weights가 대상이다. 같은 버전과 CPU torch로 작은 Llama 모델을 만들어 02의 학습 인자 그대로(bf16·paged_adamw_8bit만 CPU용으로 바꿈) 학습 → epoch 체크포인트 → 이어 하기 → 검증 생성 → merge → 저장을 돌렸다.
+  - 인자 오류는 `warmup_ratio` 하나였다.
+  - `save_pretrained(safe_serialization=True)`: 5.x에는 이 인자가 없고 `**kwargs`로 들어가 무시된다(오류 없음, 항상 safetensors 저장). 03에서 지웠다. 동작은 같다.
+  - 참고: 이미 4bit로 저장된 모델(`merged_nf4`)을 올릴 때 넘긴 `BitsAndBytesConfig`는 무시되고 저장된 양자화 설정이 쓰인다. 03이 fp16 계산 dtype으로 저장하므로 결과는 같다. `distill_common.load_student`의 docstring("계산 dtype을 덮어쓴다")은 이 점에서 부정확하지만, 묶음을 바꾸지 않기 위해 코드는 두고 04가 올린 모델의 계산 dtype을 출력하게 했다.
+- 고정: 02·03·04의 pip 셀을 `transformers==5.22.2 peft==0.21.2 bitsandbytes==0.50.2 accelerate==1.15.0`으로 고정하고, 설치된 버전이 다르면 멈춘다. 01은 끝났으므로 바꾸지 않았다.
+- warmup 3%(사전 등록값 유지): `warmup_steps=0.03`. 5.x는 1보다 작은 소수를 전체 step의 비율로 보고 올림한다(`get_warmup_steps`: ceil(전체 step × 0.03)). 예전 `warmup_ratio=0.03`과 같은 계산이다. 노트북이 전체 step과 warmup step을 학습 전에 출력하고, 학습 뒤 Trainer의 실제 전체 step과 같은지 확인해 `steps.json`에 남긴다. 학습 2,994개면 epoch당 188 step, 전체 376 step, warmup 12 step이다. 그 밖의 학습 설정(spec §6.2)은 바꾸지 않았다.
+- SMOKE 스위치(02·03·04, 기본 True. 확인 뒤 False로 본 실행)
+  - 02: 학습 32개·검증 8개, 학습률 1e-4 하나, 2 epoch(epoch당 2 step) → 체크포인트 → 검증 생성 → 근거 검사 → 설정 선택 → `chosen` 저장. Drive `lora_smoke/`.
+  - 03: `lora_smoke/chosen`으로 학생 원본의 앞 2개 층만 올려 merge → 저장 → NF4(fp16) 재로드 → 저장 → 해시. Drive `merged_nf4_smoke/`. 호출과 순서는 본 실행과 같고, 디스크·RAM 용량은 확인하지 못한다.
+  - 04: 평가 입력을 읽지 않고 검증(2022) 입력 4개로 (i) 원본과 (ii) `merged_nf4_smoke`를 시간 측정 2개 → 생성 → 근거 검사. Drive `eval_smoke/`. 선생 평가 출력은 읽지 않는다.
+- Colab 묶음은 다시 만들지 않았다. 묶음 안의 `prompt.py`·`grounding.py`·`distill_common.py`가 repo와 같음을 확인했다(sha256 `591fa13a…625a` 그대로).
+- 확인(변경 없음): 설정 선택의 "epoch 1"은 2 epoch 학습의 첫 epoch 끝 체크포인트다. cosine 일정이 2 epoch(전체 376 step) 기준이라, epoch 1 끝의 학습률은 0까지 내려가지 않고 최고값의 약 절반이다. 따라서 "1 epoch만 학습"(cosine이 188 step에서 끝남)과 정확히 같지는 않다. 사전 등록대로 두고 보고서에 이 점을 적는다.
