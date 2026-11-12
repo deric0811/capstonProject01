@@ -22,8 +22,8 @@ GOOD = (
 
 def test_good_text_passes_all_rules():
     r = grounding.check(GOOD, X)
-    assert r == {"pass": True, "a": True, "a_numbers": True, "a_median": True, "b": True, "c": True, "format": True,
-                 "errors": []}
+    assert r == {"pass": True, "a": True, "a_numbers": True, "a_median": True, "b": True, "c": True,
+                 "c_caution": True, "format": True, "perf_caution": False, "errors": []}
 
 
 # (a) 계절 중앙값 표기 (2026-11-12 개정, 학습용 입력 시험에서 발견)
@@ -165,13 +165,48 @@ def test_prompt_carries_input_and_rules():
         assert w in m[0]["content"]  # 금지어를 프롬프트로도 알린다
 
 
-def test_prompt_v2_rules():
+# (c) 주의 문장 (2026-11-12 개정, 학습용 입력 시험에서 발견): 성능 숫자가 있는 문장의 주의 단어는 세지 않는다
+CAUTION_SENT = "오늘은 가격을 낸 시장이 5곳으로 직전 거래일 4곳과 달라 평균이 흔들릴 수 있으니 주의하세요. "
+
+
+@pytest.mark.parametrize("perf_sent", [
+    "이 모델의 평균 오차는 1,412원이므로 참고하시기 바랍니다. ",
+    "직전가를 쓰는 방식보다 오차가 9.1% 작으니 참고하세요. ",
+    "평균 백분율 오차 6.3%를 감안하세요. ",
+    "934번 예측한 결과이니 유의하세요. ",
+    "평균 오차는 약 1,400원이니 참고하세요. ",
+])
+def test_caution_in_performance_sentence_not_counted(perf_sent):
+    text = GOOD.replace(CAUTION_SENT, perf_sent)
+    r = grounding.check(text, X)
+    assert r["a"] and r["b"]
+    assert not r["c_caution"] and not r["c"] and not r["pass"] and r["perf_caution"]
+    assert "성능 수치 문장에만" in " ".join(r["errors"])
+    # 따로 쓴 주의 문장이 있으면 통과하지만 perf_caution은 센다
+    r2 = grounding.check(GOOD.replace(CAUTION_SENT, CAUTION_SENT + perf_sent).replace("이 모델의 평균 오차는 1,412원이며 ", ""), X)
+    assert r2["c_caution"] and r2["pass"] and r2["perf_caution"]
+
+
+def test_caution_without_performance_numbers_counts():
+    for sent in ("2023년 이후 성능이니 참고하세요. ", "과거 성적일 뿐이니 참고하세요. "):
+        r = grounding.check(GOOD.replace(CAUTION_SENT, sent), X)
+        assert r["c_caution"] and not r["perf_caution"], sent
+    # performance가 null이면 성능 숫자가 없다
+    x = X | {"performance": None}
+    text = GOOD.replace("이 모델의 평균 오차는 1,412원이며 ", "")
+    assert grounding.check(text, x)["c_caution"]
+
+
+def test_prompt_v3_rules():
     sysm = prompt.SYSTEM
-    assert prompt.PROMPT_VERSION == "v2"
+    assert prompt.PROMPT_VERSION == "v3"
+    assert "모델 성능 문장과도 다른 별도의 문장" in sysm and "'유의'나 '참고'를 붙이지 않는다" in sysm
+    # 위험을 판단하게 하는 지시는 넣지 않는다(사용자 결정 2026-11-12)
+    assert "급락" not in sysm and "입력에 근거한 주의" not in sysm
     assert "별도의 문장" in sysm and "'유의' 또는 '참고'" in sysm
     assert '반드시 "중앙값"' in sysm and '"평균"' in sysm
     assert "model 값" in sysm and "쓰지 않는다" in sysm
-    # 성능 문장 지시는 v1과 같다
+    # 성능 문장 지시(v1부터)
     assert "performance가 null이면 모델 성능을 말하지 않는다." in sysm
 
 
@@ -204,3 +239,23 @@ def test_human_sample_is_fixed():
     inputs = [{"id": f"h3-{k:04d}"} for k in range(934)]
     a = scoring.human_sample(inputs)
     assert len(a) == 30 and a == scoring.human_sample(inputs)
+
+
+def test_human_blind_hides_model_and_shuffles():
+    from tomato.explain import scoring
+
+    inputs = [{"id": f"h3-{k:04d}", "input": X} for k in range(934)]
+    outs = {"student_base": {r["id"]: "원본 " + r["id"] for r in inputs},
+            "student_lora": {r["id"]: "로라 " + r["id"] for r in inputs}}
+    blind, key = scoring.human_blind(inputs, outs)
+    assert (blind, key) == scoring.human_blind(inputs, outs)  # seed 고정
+    ids = scoring.human_sample(inputs)
+    assert len(blind) == len(key) == 60 and sorted({b["id"] for b in blind}) == ids
+    assert all("model" not in b for b in blind)
+    assert sorted((k["id"], k["model"]) for k in key) == sorted((i, m) for i in ids for m in scoring.HUMAN_MODELS)
+    for b, k in zip(blind, key, strict=True):
+        assert b["점검번호"] == k["점검번호"] and b["해설"] == ("원본 " if k["model"] == "student_base" else "로라 ") + b["id"]
+    # 섞였다: 모델 순서가 번갈아 고정되지 않고, 같은 입력의 두 출력이 늘 붙어 있지 않다
+    models = [k["model"] for k in key]
+    assert models != [m for _ in ids for m in scoring.HUMAN_MODELS]
+    assert sum(key[t]["id"] == key[t + 1]["id"] for t in range(59)) < 30

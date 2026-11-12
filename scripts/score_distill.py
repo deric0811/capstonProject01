@@ -1,8 +1,8 @@
-"""증류 평가 채점 (spec §6.3). Colab에서 가져온 distill/eval/*.jsonl로 지표·채택 판정·사람 점검 표를 만든다.
+"""증류 평가 채점 (spec §6.3). Colab에서 가져온 distill/eval/*.jsonl로 지표와 채택 판정을 만든다.
 
-uv run python scripts/score_distill.py → distill/eval/metrics.json, distill/eval/human_check.csv
+uv run python scripts/score_distill.py → distill/eval/metrics.json
+사람 점검((i)·(ii) 가림 파일)은 scripts/human_review.py.
 """
-import csv
 import json
 import sys
 
@@ -41,15 +41,6 @@ def main():
         print(f"{m:14} {s['n']:>4} " + " ".join(f"{100 * s[k]:>8.1f}%" for k in scoring.RULES)
               + f" {s.get('mean_sec') or '—':>8} {s.get('max_reserved_gb') or '—':>8}")
     print(json.dumps(result["paired_pass"], ensure_ascii=False), json.dumps(result["decision"], ensure_ascii=False))
-
-    lora = {r["id"]: r["text"] for r in read(D / "eval" / "student_lora.jsonl")}
-    by_id = {r["id"]: r["input"] for r in inputs}
-    with open(D / "eval" / "human_check.csv", "w", newline="", encoding="utf-8-sig") as f:
-        w = csv.writer(f)
-        w.writerow(["id", "현재가", "예상가", "해설", "자동검사_통과", "사실_오류", "근거없는_원인", "어색한_문장", "메모"])
-        for i in scoring.human_sample(inputs):
-            x = by_id[i]
-            w.writerow([i, x["y_origin"], x["y_hat"], lora.get(i, ""), per["student_lora"][i]["pass"], "", "", "", ""])
     return 0
 
 

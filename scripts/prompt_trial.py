@@ -60,6 +60,7 @@ def main():
             f.write(json.dumps(x, ensure_ascii=False) + "\n")
     n = len(results)
     summary = {k: sum(x[k] for x in results) for k in scoring.RULES}
+    summary["perf_caution"] = sum(x.get("perf_caution", False) for x in results)  # 성능 문장에 붙은 주의(규칙 아님)
     print(f"\n모델 {s.model}, 프롬프트 {prompt.PROMPT_VERSION}, seed {args.seed}, n = {n}")
     for k, v in summary.items():
         print(f"  {k}: {v}/{n} ({100 * v / n:.0f}%)")

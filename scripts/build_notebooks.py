@@ -97,7 +97,7 @@ def generate(recs, path, attempt, sampling, step=256):
 def ok(row):
     return row["pass"] and row["format"]
 
-RULE_KEYS = ("pass", "format", "a", "a_numbers", "a_median", "b", "c")
+RULE_KEYS = ("pass", "format", "a", "a_numbers", "a_median", "b", "c", "c_caution", "perf_caution")
 T = dc.DRIVE / "teacher"'''),
     md("""## 시범 생성 (spec §6.1): 학습용 입력 50개(seed 20261113), 첫 시도만, 학습 설정의 샘플링
 - 첫 시도 통과율(전체·규칙별)과 실패 원문을 보고, 프롬프트를 고칠지 사용자가 정한다.

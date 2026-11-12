@@ -22,6 +22,13 @@
 
 (b) 입력에 없는 원인: FORBIDDEN의 낱말이 나오면 실패. 한계는 docs/research/distill-precheck.md 참고.
 (c) 문장 4~6개, 예상가격, 현재가와 차이, 주요 요인(추이·계절·시장 수의 숫자 하나 이상), 주의 문구, 틀릴 수 있다는 문구.
+
+(c) 주의 문장 (c_caution, 2026-11-12 개정. 학습용 입력 시험에서 발견, 평가 결과 보기 전)
+- 주의 단어(CAUTION)가 있는 문장 가운데 performance 입력의 숫자(평균 오차 mae, 평균 백분율 오차 mape, 예측 횟수 n,
+  개선 % mae_reduction_pct)가 있는 문장은 주의 문장으로 세지 않는다. 그런 문장을 뺀 주의 문장이 하나 이상 있어야 한다.
+  (c) = 나머지 구조 검사 and c_caution. 규칙별 보고에는 c_caution을 따로 집계한다.
+- perf_caution: 주의 단어가 성능 숫자와 같은 문장에 있는 출력(통과 여부와 별개로 센다).
+- 한계: 숫자가 performance 값과 같으면(반올림 포함) 다른 항목의 값이어도 성능 숫자로 본다.
 """
 import re
 
@@ -229,11 +236,30 @@ def check_structure(text, x, hits):
         errors.append("현재가와 차이 없음")
     if not set(FACTOR_PATHS) & hits:
         errors.append("주요 요인(추이·계절·시장 수) 없음")
-    if not CAUTION.search(text):
-        errors.append("주의사항 문구 없음")
     if not UNCERTAIN.search(text):
         errors.append("예측이 틀릴 수 있다는 문구 없음")
     return not errors, errors
+
+
+def caution_sentences(text, x):
+    """(성능 숫자가 없는 주의 문장, 성능 숫자와 같이 있는 주의 문장)."""
+    plain, perf = [], []
+    for sent in sentences(strip_identifiers(text, x)):
+        if not CAUTION.search(sent):
+            continue
+        _, _, hits = check_numbers(sent, x)
+        (perf if any(h.startswith("performance.") for h in hits) else plain).append(sent)
+    return plain, perf
+
+
+def check_caution(text, x):
+    """(통과 여부, 오류 목록, 성능 문장에 붙은 주의가 있는지)."""
+    plain, perf = caution_sentences(text, x)
+    if plain:
+        return True, [], bool(perf)
+    if perf:
+        return False, ["주의사항 문구 없음(성능 수치 문장에만 주의 단어가 있음)"], True
+    return False, ["주의사항 문구 없음"], False
 
 
 def check_format(text):
@@ -254,7 +280,9 @@ def check(text, x):
     am, em = check_median_label(text, x)
     a = an and am
     b, eb = check_causes(text)
-    c, ec = check_structure(text, x, hits)
+    cs, ec = check_structure(text, x, hits)
+    cc, ecc, perf = check_caution(text, x)
+    c = cs and cc
     fm, ef = check_format(text)
-    return {"pass": a and b and c, "a": a, "a_numbers": an, "a_median": am, "b": b, "c": c, "format": fm,
-            "errors": ea + em + eb + ec + ef}
+    return {"pass": a and b and c, "a": a, "a_numbers": an, "a_median": am, "b": b, "c": c, "c_caution": cc,
+            "format": fm, "perf_caution": perf, "errors": ea + em + eb + ec + ecc + ef}
