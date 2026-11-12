@@ -74,8 +74,12 @@ NB["01_teacher_generate.ipynb"] = notebook([
         resume="출력은 256개마다 Drive `teacher/*.jsonl`에 이어 쓴다. 끊기면 처음부터 다시 실행하면 이미 있는 id는 건너뛴다.")),
     code(SETUP),
     code(r'''!pip install -q -U vllm
+# vLLM 엔진을 같은 프로세스에서 돌린다. 별도 프로세스(spawn)로 돌면 그 프로세스의 오류가 노트북에 보이지 않는다
+# ("Engine core initialization failed. See root cause above"만 남음). 생성 결과(요청별 seed)는 같다.
+os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
 import vllm, torch
-print("vllm", vllm.__version__, "torch", torch.__version__)'''),
+print("vllm", vllm.__version__, "torch", torch.__version__)
+!nvidia-smi --query-gpu=memory.used,memory.total --format=csv  # 앞 실행의 모델이 GPU를 잡고 있으면 used가 크다 → 세션 다시 시작'''),
     md("## 선생 로드 (GPU 메모리로 정밀도 결정, revision 고정, 사고 출력 끔)"),
     code(r'''from vllm import LLM, SamplingParams
 GB = dc.gpu_gb()
