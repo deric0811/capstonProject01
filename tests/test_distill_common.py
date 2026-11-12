@@ -74,4 +74,7 @@ def test_pilot_is_fixed_training_only_and_eval_dtype_is_fp16(dc):
     p = dc.pilot_subset()
     assert len(p) == dc.N_PILOT == 50 and all(r["split"] == "train" for r in p)
     assert [r["id"] for r in dc.pilot_subset()] == [r["id"] for r in p]
+    p1, p2 = dc.pilot_sets()
+    assert p1 == p and len(p2) == 50 and all(r["split"] == "train" for r in p2)
+    assert not {r["id"] for r in p1} & {r["id"] for r in p2}
     assert dc.EVAL_COMPUTE_DTYPE == "fp16"

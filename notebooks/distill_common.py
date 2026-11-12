@@ -29,6 +29,7 @@ TEACHER_SAMPLING = {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "max_tokens":
 MAX_RETRIES = 2  # 근거 검사에 실패한 선생 출력은 seed를 바꿔 최대 2번 다시 생성
 N_TRAIN, N_VAL, N_TIMING = 3000, 200, 50
 N_PILOT, PILOT_SEED = 50, 20261113  # 선생 시범 생성 (spec §6.1): 학습용 입력 50개, 첫 시도만
+PILOT_SEED2 = 20261115  # 시범 둘째 묶음 50개(첫 묶음과 겹치지 않음, 2026-11-13 추가)
 MAX_NEW_TOKENS = 512
 STOP_STRINGS = ["<|im_end|>", "<|endofturn|>", "<|stop|>"]
 LORA_GRID = {"r": 16, "alpha": 32, "dropout": 0.05, "lr": (1e-4, 2e-4), "epochs": 2,
@@ -59,10 +60,17 @@ def subsets():
     return pick(train, N_TRAIN), pick(val, N_VAL)
 
 
-def pilot_subset():
-    """선생 시범 생성용 학습용 입력(2003~2021) N_PILOT개. 시범 출력은 학습에 쓰지 않는다(전체 생성에서 다시 만든다)."""
-    recs = [r for r in load_inputs("train") if r["split"] == "train"]
-    return sorted(random.Random(PILOT_SEED).sample(recs, N_PILOT), key=lambda r: r["id"])
+def pilot_subset(seed=PILOT_SEED, exclude=()):
+    """선생 시범 생성용 학습용 입력(2003~2021) N_PILOT개. 시범 출력은 학습에 쓰지 않는다(전체 생성에서 다시 만든다).
+    exclude의 id는 빼고 뽑는다(둘째 묶음은 첫 묶음을 뺀다)."""
+    recs = [r for r in load_inputs("train") if r["split"] == "train" and r["id"] not in set(exclude)]
+    return sorted(random.Random(seed).sample(recs, N_PILOT), key=lambda r: r["id"])
+
+
+def pilot_sets():
+    """시범 두 묶음: (첫 묶음 seed 20261113, 둘째 묶음 seed 20261115, 첫 묶음과 겹치지 않음)."""
+    p1 = pilot_subset()
+    return p1, pilot_subset(PILOT_SEED2, exclude=[r["id"] for r in p1])
 
 
 def eval_inputs():

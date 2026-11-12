@@ -113,17 +113,29 @@ def ok(row):
 
 RULE_KEYS = ("pass", "format", "a", "a_numbers", "a_median", "b", "c", "c_caution", "perf_caution")
 T = dc.DRIVE / "teacher"'''),
-    md("""## 시범 생성 (spec §6.1): 학습용 입력 50개(seed 20261113), 첫 시도만, 학습 설정의 샘플링
-- 첫 시도 통과율(전체·규칙별)과 실패 원문을 보고, 프롬프트를 고칠지 사용자가 정한다.
+    md("""## 시범 생성 (spec §6.1): 학습용 입력 50개(seed 20261113) + 새 50개(seed 20261115, 겹치지 않음), 첫 시도만, 학습 설정의 샘플링
+- 묶음별·합계 첫 시도 통과율(전체·규칙별), 실패 이유별 개수, 실패 원문 5개를 보고 프롬프트를 고칠지 사용자가 정한다.
 - 고치면 repo에서 `PROMPT_VERSION`을 올리고 decisions에 기록한 뒤, 묶음을 다시 만들어 올리고 이 노트북을 처음부터 다시 실행한다.
 - 시범 출력은 학습에 쓰지 않는다."""),
-    code(r'''pilot = dc.pilot_subset()
+    code(r'''import re
+from collections import Counter
+pilot1, pilot2 = dc.pilot_sets()
 ppath = T / f"pilot_{prompt.PROMPT_VERSION}.jsonl"
-generate(pilot, ppath, 0, dc.TEACHER_SAMPLING)
-prows = dc.read_jsonl(ppath)
-meta["pilot"] = {"prompt_version": prompt.PROMPT_VERSION, "n": len(prows), **{k: sum(r[k] for r in prows) for k in RULE_KEYS}}
-print(json.dumps(meta["pilot"], ensure_ascii=False))
-for r in [r for r in prows if not ok(r)][:5]:
+generate(pilot1 + pilot2, ppath, 0, dc.TEACHER_SAMPLING)
+prows = {r["id"]: r for r in dc.read_jsonl(ppath)}
+meta["pilot"] = {"prompt_version": prompt.PROMPT_VERSION}
+for name, recs in (("seed20261113", pilot1), ("seed20261115", pilot2), ("합계", pilot1 + pilot2)):
+    rows = [prows[r["id"]] for r in recs]
+    meta["pilot"][name] = {"n": len(rows), **{k: sum(r[k] for r in rows) for k in RULE_KEYS}}
+    print(name, json.dumps(meta["pilot"][name], ensure_ascii=False))
+
+def reason(e):  # 실패 이유를 묶는다: 따옴표 안 값과 숫자를 지운다
+    return re.sub(r"\d[\d,.]*", "N", re.sub(r"'[^']*'", "'…'", e))
+
+fails = [r for r in prows.values() if not ok(r)]
+print("\n실패 이유별 개수:", dict(Counter(reason(e) for r in fails for e in r["errors"]).most_common()))
+print("실패 출력 수:", len(fails))
+for r in fails[:5]:
     print("----", r["id"], r["errors"]); print(r["text"])'''),
     md("## 프롬프트 고정: 시범 결과를 보고 고정할 버전을 적는다. 이 셀부터가 전체 생성이다"),
     code(r'''FREEZE = None  # 시범 결과를 본 뒤 고정할 PROMPT_VERSION(예: "v2")을 넣는다
