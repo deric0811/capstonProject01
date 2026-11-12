@@ -205,7 +205,7 @@ def test_prompt_v4_rules():
     for mark in "①②③④⑤⑥":
         assert mark in sysm
     assert "시장 수가 그대로면 시장 수를 쓰지 않는다" in sysm and "빼도 된다" not in sysm
-    assert "모델 성능은 한 문장으로만" in sysm
+    assert "모델 성능은 한 문장으로만" in sysm and "현재가 금액을 반드시 쓴다" in sysm
     # 주의 문장: 활용상 주의, '유의'·'참고', 숫자·성능 내용 없음, 별도 문장
     assert "활용상 주의만" in sysm and "'유의' 또는 '참고'" in sysm and "숫자와 성능 내용은 넣지 않는다" in sysm
     assert "④·⑥과 다른 별도의 문장" in sysm
