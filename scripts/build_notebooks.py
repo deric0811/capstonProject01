@@ -344,6 +344,12 @@ NB["03_merge_quantize.ipynb"] = notebook([
         resume="Drive `merged_nf4/hashes.json`이 있으면 끝난 것이다. 중간에 끊기면 처음부터 다시 한다.")),
     code(SETUP),
     code(PIP + r'''
+# Colab에 깔린 torchao 0.10.0을 지운다. peft 0.21.2는 bnb가 아닌 일반 Linear(여기서는 bf16 원본)에 LoRA를 붙일 때
+# torchao 판별 함수를 부르고, torchao가 있는데 0.16.0 미만이면 ImportError를 낸다(peft import_utils.is_torchao_available).
+# 02는 4bit(bnb) 층이라 bnb 판별에서 먼저 끝나 이 경로를 타지 않았다. torchao는 이 노트북에서 쓰지 않는다.
+!pip uninstall -y -q torchao
+import importlib; importlib.invalidate_caches()
+assert importlib.util.find_spec("torchao") is None, "torchao가 남아 있다"
 import torch, shutil
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel'''),

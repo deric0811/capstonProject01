@@ -367,3 +367,6 @@
   - 04: 평가 입력을 읽지 않고 검증(2022) 입력 4개로 (i) 원본과 (ii) `merged_nf4_smoke`를 시간 측정 2개 → 생성 → 근거 검사. Drive `eval_smoke/`. 선생 평가 출력은 읽지 않는다.
 - Colab 묶음은 다시 만들지 않았다. 묶음 안의 `prompt.py`·`grounding.py`·`distill_common.py`가 repo와 같음을 확인했다(sha256 `591fa13a…625a` 그대로).
 - 확인(변경 없음): 설정 선택의 "epoch 1"은 2 epoch 학습의 첫 epoch 끝 체크포인트다. cosine 일정이 2 epoch(전체 376 step) 기준이라, epoch 1 끝의 학습률은 0까지 내려가지 않고 최고값의 약 절반이다. 따라서 "1 epoch만 학습"(cosine이 188 step에서 끝남)과 정확히 같지는 않다. 사전 등록대로 두고 보고서에 이 점을 적는다.
+- 03 SMOKE 실패와 수정 (2026-11-13): `PeftModel.from_pretrained`에서 `ImportError: Found an incompatible version of torchao. Found version 0.10.0, but only versions above 0.16.0 are supported`.
+  - 원인: peft 0.21.2는 LoRA를 붙일 층을 bnb → … → torchao 순서로 판별한다. 03은 bf16 원본(일반 Linear)이라 torchao 판별까지 가고, Colab에 깔린 torchao 0.10.0이 최소 버전 미만이라 오류를 낸다. 02는 4bit(bnb) 층이라 bnb 판별에서 끝나 이 경로를 타지 않았다.
+  - 수정: 03의 pip 셀에서 torchao를 지우고 없어졌는지 확인한다(이 노트북은 torchao를 쓰지 않는다). 로컬에서 torchao 0.10.0을 깔아 같은 오류를 재현했고, 지우면 merge가 통과했다. 02(실행 중)와 04(peft 미사용)는 바꾸지 않았다.
