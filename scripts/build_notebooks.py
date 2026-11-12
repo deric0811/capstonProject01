@@ -291,17 +291,21 @@ evals = dc.eval_inputs()
 timing = dc.timing_subset(evals)
 E = dc.DRIVE / "eval"
 print(len(evals), len(timing))'''),
-    md("## 배포 형식 그대로 로드 (NF4, embedding만 CPU), greedy, 사고 출력 끔 (skip_reasoning)"),
-    code(r'''MODELS = [("student_base", dc.STUDENT_ID), ("student_lora", str(dc.DRIVE / "merged_nf4"))]
+    md("## 배포 형식 그대로 로드 (NF4, embedding만 CPU), greedy, 사고 출력 끔 (skip_reasoning)\n"
+       "계산 dtype은 데모 서버에서 `scripts/demo_gpu_check.py`로 확인해 사용자가 정한 하나만 쓴다(spec §6.2). "
+       "정하기 전에는 아래 셀이 멈춘다."),
+    code(r'''COMPUTE_DTYPE = None  # [미정] spec §6.2: 데모 서버 확인 후 "fp16" 또는 "bf16"을 넣는다
+assert COMPUTE_DTYPE in dc.COMPUTE_DTYPES, "계산 dtype을 먼저 정한다 (spec §6.2)"
+MODELS = [("student_base", dc.STUDENT_ID), ("student_lora", str(dc.DRIVE / "merged_nf4"))]
 for label, path in MODELS:
     tpath, gpath = E / f"{label}_timing.json", E / f"{label}.jsonl"
     if tpath.exists() and len(dc.read_jsonl(gpath)) >= len(evals):
         continue
-    model, tok = dc.load_student(path)
+    model, tok = dc.load_student(path, compute=COMPUTE_DTYPE)
     print(label, "device map 확인:", {k: v for k, v in model.hf_device_map.items() if v == "cpu"})
     if not tpath.exists():
         t = dc.measure_latency(model, tok, prompt, timing)
-        t.update({"model": label, "path": path, "prompt_version": prompt.PROMPT_VERSION})
+        t.update({"model": label, "path": path, "prompt_version": prompt.PROMPT_VERSION, "compute_dtype": COMPUTE_DTYPE})
         tpath.write_text(json.dumps(t, ensure_ascii=False, indent=1))
         print(label, t["mean_sec"], "초", t["max_reserved_gb"], "GB")
     dc.student_generate(model, tok, prompt, evals, batch_size=16, out_path=gpath, label=label)
@@ -315,6 +319,7 @@ for label in ("student_base", "student_lora", "teacher"):
         print(label, len(rows), "pass", round(sum(c["pass"] for c in cs) / len(cs), 3))'''),
     md("""## repo로 가져올 파일
 - `eval/student_base.jsonl`, `eval/student_lora.jsonl`, `eval/*_timing.json` → `distill/eval/`
+- `merged_nf4/`를 데모 서버로 옮겨 `scripts/demo_gpu_check.py --timing`으로 VRAM을 잰다(채택 기준 2, spec §6.3).
 - 그다음 repo에서 `uv run python scripts/score_distill.py`를 실행한다."""),
 ])
 

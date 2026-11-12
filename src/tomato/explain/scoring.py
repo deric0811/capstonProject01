@@ -2,7 +2,9 @@
 
 - 분모는 평가 입력 전체(934개). 출력이 없는 입력은 모든 규칙에서 실패로 센다.
 - 통과율 = 근거 검사 pass(a and b and c) 비율. 규칙별 a·b·c와 형식 준수율을 따로 낸다.
-- 채택: (ii) LoRA 학생 통과율 >= 0.90이면 explain에 학생을 쓴다. 미달이면 템플릿 유지.
+- 채택(2026-11-12 개정): (ii) LoRA 학생 통과율 >= 0.90 그리고 데모 서버(RTX 2080 Ti) batch 1 최대 VRAM
+  (max_memory_reserved) <= 10GB(10 × 10⁹ 바이트)이면 explain에 학생을 쓴다.
+  미달이면 API(BYOK) → 템플릿. 데모 측정이 아직 없으면 판정을 보류한다.
 - 증류 효과: (ii) - (i) 통과율 차이와 짝지은 개수(둘 다 통과, (i)만, (ii)만, 둘 다 실패).
 """
 import random
@@ -11,6 +13,7 @@ from tomato.explain import grounding
 
 MODELS = ("student_base", "student_lora", "teacher")
 ADOPT_THRESHOLD = 0.90
+VRAM_LIMIT_GB = 10.0  # 10 × 10⁹ 바이트
 HUMAN_N, HUMAN_SEED = 30, 20261111
 RULES = ("pass", "a", "b", "c", "format")
 
@@ -36,10 +39,20 @@ def paired(per_i, per_ii):
     }
 
 
-def decide(summary):
+def decide(summary, demo_vram_gb=None):
+    """demo_vram_gb: 데모 서버에서 잰 (ii)의 최대 VRAM(GB). None이면 아직 재지 않은 것."""
     rate = summary["student_lora"]["pass"]
-    return {"adopt_student": rate >= ADOPT_THRESHOLD, "student_lora_pass": rate, "threshold": ADOPT_THRESHOLD,
-            "explain": "student" if rate >= ADOPT_THRESHOLD else "template",
+    pass_ok = rate >= ADOPT_THRESHOLD
+    vram_ok = None if demo_vram_gb is None else demo_vram_gb <= VRAM_LIMIT_GB
+    adopt = pass_ok and vram_ok is True
+    if adopt:
+        explain = "student"
+    elif pass_ok and vram_ok is None:
+        explain = "pending_demo_vram"
+    else:
+        explain = "api_or_template"
+    return {"adopt_student": adopt, "student_lora_pass": rate, "threshold": ADOPT_THRESHOLD, "pass_ok": pass_ok,
+            "demo_vram_gb": demo_vram_gb, "vram_limit_gb": VRAM_LIMIT_GB, "vram_ok": vram_ok, "explain": explain,
             "distill_effect_pts": round(100 * (rate - summary["student_base"]["pass"]), 1)}
 
 

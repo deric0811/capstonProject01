@@ -1,5 +1,6 @@
 """Colab 노트북 공용 코드 중 GPU 없이 검사할 수 있는 부분 (분할·이어 쓰기·SFT 손실 위치)."""
 import importlib
+import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -58,3 +59,12 @@ def test_sft_loss_only_on_target(dc):
     n_target = len("AB<|im_end|><|endofturn|>")
     assert f["labels"][:5] == [-100] * 5
     assert f["labels"][5:] == f["input_ids"][5:] and len(f["labels"]) == 5 + n_target
+
+
+def test_demo_check_uses_three_fixed_training_inputs_only():
+    spec = importlib.util.spec_from_file_location("demo_gpu_check", ROOT / "scripts" / "demo_gpu_check.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    recs = mod.check_inputs()
+    assert len(recs) == 3 and all(r["split"] == "train" and r["id"] < "h3-2022" for r in recs)
+    assert [r["id"] for r in mod.check_inputs()] == [r["id"] for r in recs]

@@ -76,8 +76,10 @@
   - 남은 일정은 약 12일이다.
   - 현장 검증을 하지 않으므로 효용은 매입 시뮬레이션으로만 간접 확인한다.
 - **다음 할 일**
-  - 증류: 4bit 형식 확인 → 프롬프트 시험(Gemini, `.env`에 `LLM_API_KEY`) → 묶음 업로드 → Colab 01~04 → `score_distill.py` → 채택 판정
-  - 데모 PC(RTX 3080 10GB): OS, 드라이버, Docker GPU 지원 확인
+  - 증류: 프롬프트 시험(Gemini) → 데모 서버 dtype 확인(`scripts/demo_gpu_check.py`) → 계산 dtype 결정 → 묶음 업로드 → Colab 01~04 → 데모 서버 VRAM 측정(`--timing`) → `score_distill.py` → 채택 판정
+    - 확정(2026-11-12): 4bit 형식 NF4 + embedding CPU. 채택 = 통과율 ≥ 90% 그리고 데모 서버 VRAM ≤ 10GB. 미달이면 API(BYOK) → 템플릿
+  - 데모 서버(~~RTX 3080 10GB~~ RTX 2080 Ti 22GB 개조, 2026-11-12 정정): OS, 드라이버, Docker GPU 지원 확인
+  - 범위 제외: 해설 꼬리질문(대화형). 향후 과제
   - 향후 과제 후보: MAE 기반 선택 규칙과 매입 효용의 어긋남(h = 7)
   - 사전 등록 실험 결과 (`stage2-backtest.md`)
     - h = 21: LightGBM full 선택. 상대 MAE 0.79, DM 검정 유의(α = 0.025)

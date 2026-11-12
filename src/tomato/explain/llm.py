@@ -1,7 +1,7 @@
 """LLM 호출은 이 파일 한 곳에만 둔다 (spec §6). 가격은 예측하지 않고 설명만 만든다.
 
 제공자는 설정(.env 또는 환경변수)으로만 고른다. 둘 다 OpenAI 호환 chat completions로 부른다.
-- local: GPU PC(RTX 3080 10GB)에서 띄운 학생 모델 서버. 사고(thinking) 출력은 skip_reasoning으로 끈다.
+- local: 데모 서버(RTX 2080 Ti 22GB)에서 띄운 학생 모델 서버. 사고(thinking) 출력은 skip_reasoning으로 끈다.
 - api:   GPU가 없는 환경의 대체. 사용자 키(BYOK, LLM_API_KEY)를 쓴다. 기본은 Gemini의 OpenAI 호환 주소.
 - auto:  local 서버가 응답하면 local, 아니면 키가 있을 때 api, 둘 다 안 되면 None(템플릿 유지).
 키는 .env에서 읽고 출력하거나 파일에 쓰지 않는다. 오류 메시지에서도 가린다.

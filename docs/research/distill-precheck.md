@@ -95,6 +95,11 @@
 - **VRAM 측정**: A100에서 `torch.cuda.max_memory_reserved()`로 잰 값은 대리 지표다. 3080 데모에서 다시 확인한다.
 
 ## 4. 데모 PC (RTX 3080 10GB)
+> 2026-11-12 정정: 데모 서버는 RTX 2080 Ti 22GB(개조)다(decisions 2026-11-12). 아래 확인 항목은 그대로 적용하고, 다음을 더한다.
+> - Turing(sm_75)은 bf16 연산을 하드웨어로 지원하지 않는다. 계산 dtype(bf16/fp16)은 `scripts/demo_gpu_check.py` 결과로 정한다.
+> - bitsandbytes 4bit는 sm_75를 지원한다. FlashAttention 2는 sm_80 이상이라 쓰지 않는다(노트북도 기본 sdpa).
+> - 22GB라 10GB는 하드웨어 한계가 아니라 채택 기준(spec §6.3)이다.
+
 - 확인할 것은 OS(Windows+WSL2인지 Linux인지)와 NVIDIA 드라이버 버전이다.
 - Docker GPU 지원도 확인해야 한다.
   - Linux는 NVIDIA Container Toolkit이 필요하다.

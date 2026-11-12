@@ -106,16 +106,27 @@ def gpu_gb():
 
 
 # ---------------- 학생 (transformers + bitsandbytes NF4) ----------------
-def bnb_config():
+# 계산 dtype (spec §6.2). 학습·설정 선택(A100)은 bf16. 평가·배포는 데모 서버(RTX 2080 Ti) 확인 후 정한 하나 [미정].
+COMPUTE_DTYPES = ("bf16", "fp16")
+
+
+def torch_dtype(name):
     import torch
+
+    if name not in COMPUTE_DTYPES:
+        raise ValueError(f"계산 dtype은 {COMPUTE_DTYPES} 중 하나여야 한다: {name!r}")
+    return {"bf16": torch.bfloat16, "fp16": torch.float16}[name]
+
+
+def bnb_config(compute="bf16"):
     from transformers import BitsAndBytesConfig
 
     return BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_use_double_quant=True,
-                              bnb_4bit_compute_dtype=torch.bfloat16, llm_int8_enable_fp32_cpu_offload=True)
+                              bnb_4bit_compute_dtype=torch_dtype(compute), llm_int8_enable_fp32_cpu_offload=True)
 
 
 def deploy_device_map(cfg):
-    """배포 형식: embedding만 CPU, 나머지는 GPU 0 (precheck §3 제안, 사용자 확인 필요). 모듈 이름은 빈 모델에서 읽는다."""
+    """배포 형식: embedding만 CPU, 나머지는 GPU 0 (spec §6.2, 사용자 결정 2026-11-12). 모듈 이름은 빈 모델에서 읽는다."""
     from accelerate import init_empty_weights
     from transformers import AutoModelForCausalLM
 
@@ -131,17 +142,16 @@ def deploy_device_map(cfg):
     return dm
 
 
-def load_student(path_or_id=STUDENT_ID, revision=STUDENT_REV, deploy=True):
-    import torch
+def load_student(path_or_id=STUDENT_ID, revision=STUDENT_REV, deploy=True, compute="bf16"):
+    """NF4(이중 양자화)로 올린다. 이미 4bit로 저장된 모델도 bnb_config를 넘겨 계산 dtype을 compute로 덮어쓴다."""
     from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 
     kw = {"revision": revision} if path_or_id == STUDENT_ID else {}
     cfg = AutoConfig.from_pretrained(path_or_id, **kw)
     tok = AutoTokenizer.from_pretrained(path_or_id, **kw)
     tok.padding_side = "left"
-    quant = None if getattr(cfg, "quantization_config", None) else bnb_config()
     model = AutoModelForCausalLM.from_pretrained(
-        path_or_id, quantization_config=quant, dtype=torch.bfloat16,
+        path_or_id, quantization_config=bnb_config(compute), dtype=torch_dtype(compute),
         device_map=deploy_device_map(cfg) if deploy else {"": 0}, **kw)
     model.eval()
     return model, tok

@@ -131,11 +131,19 @@ def test_scoring_counts_missing_as_fail_and_decides_by_threshold():
     s, per = scoring.score(inputs, {f"x{k}": GOOD for k in range(9)})
     assert s["n"] == 10 and s["missing"] == 1 and s["pass"] == 0.9 and per["x9"]["pass"] is False
     base, per_b = scoring.score(inputs, {"x0": GOOD})
-    d = scoring.decide({"student_lora": s, "student_base": base})
+    sm = {"student_lora": s, "student_base": base}
+    d = scoring.decide(sm, demo_vram_gb=9.4)
     assert d["adopt_student"] and d["explain"] == "student" and d["distill_effect_pts"] == 80.0
     assert scoring.paired(per_b, per) == {"both": 1, "only_base": 0, "only_lora": 8, "neither": 1}
+    # 채택 기준 2: 데모 서버 VRAM <= 10GB (경계 포함), 측정 전이면 보류
+    assert scoring.decide(sm, demo_vram_gb=10.0)["adopt_student"]
+    d = scoring.decide(sm, demo_vram_gb=10.01)
+    assert not d["adopt_student"] and d["explain"] == "api_or_template"
+    d = scoring.decide(sm)
+    assert not d["adopt_student"] and d["explain"] == "pending_demo_vram"
     s2, _ = scoring.score(inputs, {f"x{k}": GOOD for k in range(8)})
-    assert scoring.decide({"student_lora": s2, "student_base": base})["explain"] == "template"
+    for v in (None, 9.0):
+        assert scoring.decide({"student_lora": s2, "student_base": base}, v)["explain"] == "api_or_template"
 
 
 def test_human_sample_is_fixed():
