@@ -197,24 +197,23 @@ def test_caution_without_performance_numbers_counts():
     assert grounding.check(text, x)["c_caution"]
 
 
-def test_prompt_v4_rules():
+def test_prompt_v5_rules():
     sysm = prompt.SYSTEM
-    assert prompt.PROMPT_VERSION == "v4"
-    # 문장 구성 ①~⑥, 6문장 상한
-    assert "전체 6문장을 넘기지 않는다" in sysm
+    assert prompt.PROMPT_VERSION == "v5"
+    # v5: 문장 구성 안내에 번호·기호가 없고, 이어진 한 문단을 명시한다
     for mark in "①②③④⑤⑥":
-        assert mark in sysm
+        assert mark not in sysm
+    assert "번호·기호·줄바꿈 없이 이어진 한 문단으로 쓴다" in sysm
+    assert "먼저 예상 날짜의 예상가격" in sysm and "다음으로 최근 20거래일 추이" in sysm and "그다음 같은 달 과거 중앙값" in sysm
+    assert "이어서 모델 성능은 한 문장으로만" in sysm and "그다음 주의 문장을 쓴다" in sysm and "마지막으로" in sysm
+    # v4 내용 유지
+    assert "전체 6문장을 넘기지 않는다" in sysm and "현재가 금액을 반드시 쓴다" in sysm
     assert "시장 수가 그대로면 시장 수를 쓰지 않는다" in sysm and "빼도 된다" not in sysm
-    assert "모델 성능은 한 문장으로만" in sysm and "현재가 금액을 반드시 쓴다" in sysm
-    # 주의 문장: 활용상 주의, '유의'·'참고', 숫자·성능 내용 없음, 별도 문장
     assert "활용상 주의만" in sysm and "'유의' 또는 '참고'" in sysm and "숫자와 성능 내용은 넣지 않는다" in sysm
-    assert "④·⑥과 다른 별도의 문장" in sysm
-    # 인과·전망·입력에 없는 요인 금지 (위험을 판단·예측하게 하는 지시는 없다)
     assert "인과를 만들지 않는다" in sysm and "스스로 전망하지 않는다" in sysm and '"외부 요인"' in sysm
     assert "입력에 근거한 주의" not in sysm
-    # v2부터 유지
     assert '반드시 "중앙값"' in sysm and "model 값" in sysm
-    assert "performance가 null이면 ④를 빼고 모델 성능을 말하지 않는다." in sysm
+    assert "performance가 null이면 성능 문장을 빼고 모델 성능을 말하지 않는다." in sysm
 
 
 # 증류 평가 채점 (spec §6.3)

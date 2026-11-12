@@ -84,6 +84,18 @@ print("vllm", vllm.__version__, "torch", torch.__version__)
     code(r'''from vllm import LLM, SamplingParams
 GB = dc.gpu_gb()
 TID, TREV = dc.TEACHERS[80 if GB >= 70 else 40]
+# 이어 실행할 때 선생이 바뀌지 않게: 처음 잡힌 선생을 Drive에 기록하고, 다른 선생이 잡히면 멈춘다
+choice_path = dc.DRIVE / "teacher" / "teacher_choice.json"
+choice = {"teacher": TID, "revision": TREV, "gpu_gb": GB}
+if choice_path.exists():
+    first = json.loads(choice_path.read_text())
+    assert (first["teacher"], first["revision"]) == (TID, TREV), (
+        f"처음 실행의 선생은 {first['teacher']}(GPU {first['gpu_gb']}GB)인데 지금은 {TID}(GPU {GB}GB)다. "
+        "선생이 섞이지 않게 런타임을 끊고 처음과 같은 GPU 메모리로 다시 연결한다.")
+else:
+    choice_path.parent.mkdir(parents=True, exist_ok=True)
+    choice_path.write_text(json.dumps(choice | {"at": time.strftime("%Y-%m-%d %H:%M:%S")}))
+print("선생", choice)
 llm = LLM(model=TID, revision=TREV, max_model_len=4096, gpu_memory_utilization=0.90,
           limit_mm_per_prompt={"image": 0, "video": 0}, seed=dc.SEED)
 CT = {"enable_thinking": False}
@@ -196,7 +208,7 @@ if not timing_path.exists():
 print(json.loads(timing_path.read_text())["mean_sec"])
 (dc.DRIVE / "teacher" / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1))'''),
     md("""## repo로 가져올 파일
-- `teacher/pilot_*.jsonl`, `teacher/train_final.jsonl`, `teacher/val_final.jsonl`, `teacher/train_a*.jsonl`, `teacher/val_a*.jsonl`, `teacher/meta.json` → `distill/teacher/`
+- `teacher/pilot_*.jsonl`, `teacher/train_final.jsonl`, `teacher/val_final.jsonl`, `teacher/train_a*.jsonl`, `teacher/val_a*.jsonl`, `teacher/meta.json`, `teacher/teacher_choice.json` → `distill/teacher/`
 - `eval/teacher.jsonl`, `eval/teacher_timing.json` → `distill/eval/`"""),
     code(SHUTDOWN),
 ])
