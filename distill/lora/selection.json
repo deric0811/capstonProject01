@@ -1,0 +1,72 @@
+{
+ "grid": {
+  "r": 16,
+  "alpha": 32,
+  "dropout": 0.05,
+  "lr": [
+   0.0001,
+   0.0002
+  ],
+  "epochs": 2,
+  "targets": [
+   "q_proj",
+   "k_proj",
+   "v_proj",
+   "o_proj",
+   "gate_proj",
+   "up_proj",
+   "down_proj"
+  ]
+ },
+ "results": [
+  {
+   "lr": 0.0001,
+   "epoch": 1,
+   "checkpoint": "/content/drive/MyDrive/tomato-distill/lora/r16_lr0.0001/checkpoint-188",
+   "val_pass": 0.995,
+   "val_format": 1.0,
+   "val_loss": 0.07490643858909607
+  },
+  {
+   "lr": 0.0001,
+   "epoch": 2,
+   "checkpoint": "/content/drive/MyDrive/tomato-distill/lora/r16_lr0.0001/checkpoint-376",
+   "val_pass": 0.995,
+   "val_format": 1.0,
+   "val_loss": 0.07114482671022415
+  },
+  {
+   "lr": 0.0002,
+   "epoch": 1,
+   "checkpoint": "/content/drive/MyDrive/tomato-distill/lora/r16_lr0.0002/checkpoint-188",
+   "val_pass": 0.985,
+   "val_format": 1.0,
+   "val_loss": 0.07416234910488129
+  },
+  {
+   "lr": 0.0002,
+   "epoch": 2,
+   "checkpoint": "/content/drive/MyDrive/tomato-distill/lora/r16_lr0.0002/checkpoint-376",
+   "val_pass": 0.995,
+   "val_format": 1.0,
+   "val_loss": 0.07007955759763718
+  }
+ ],
+ "chosen": {
+  "lr": 0.0002,
+  "epoch": 2,
+  "checkpoint": "/content/drive/MyDrive/tomato-distill/lora/r16_lr0.0002/checkpoint-376",
+  "val_pass": 0.995,
+  "val_format": 1.0,
+  "val_loss": 0.07007955759763718
+ },
+ "n_train": 2994,
+ "n_val": 200,
+ "smoke": false,
+ "versions": {
+  "transformers": "5.22.2",
+  "peft": "0.21.2",
+  "bitsandbytes": "0.50.2",
+  "accelerate": "1.15.0"
+ }
+}

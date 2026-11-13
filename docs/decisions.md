@@ -370,3 +370,19 @@
 - 03 SMOKE 실패와 수정 (2026-11-13): `PeftModel.from_pretrained`에서 `ImportError: Found an incompatible version of torchao. Found version 0.10.0, but only versions above 0.16.0 are supported`.
   - 원인: peft 0.21.2는 LoRA를 붙일 층을 bnb → … → torchao 순서로 판별한다. 03은 bf16 원본(일반 Linear)이라 torchao 판별까지 가고, Colab에 깔린 torchao 0.10.0이 최소 버전 미만이라 오류를 낸다. 02는 4bit(bnb) 층이라 bnb 판별에서 끝나 이 경로를 타지 않았다.
   - 수정: 03의 pip 셀에서 torchao를 지우고 없어졌는지 확인한다(이 노트북은 torchao를 쓰지 않는다). 로컬에서 torchao 0.10.0을 깔아 같은 오류를 재현했고, 지우면 merge가 통과했다. 02(실행 중)와 04(peft 미사용)는 바꾸지 않았다.
+
+## 2026-11-13: Colab 02 본 실행 완료, 설정 선택 (사전 등록 규칙대로)
+- 학습: 학생 `HyperCLOVAX-SEED-Think-14B`(revision 고정) QLoRA, 학습 2,994개, 학습률 1e-4·2e-4 각각 2 epoch, 전체 376 step(epoch당 188), warmup 12 step. A100 80GB, 학습률당 약 2시간. transformers 5.22.2, peft 0.21.2, bitsandbytes 0.50.2, accelerate 1.15.0.
+  - 2e-4 첫 실행은 런타임 표시가 끊긴 것처럼 보였으나 학습은 계속됐다(재실행 없음).
+- 검증(2022) 200개 greedy 생성의 근거 검사 통과율과 검증 손실
+
+| 설정 | 통과율 | 형식 | 검증 손실 |
+|---|---|---|---|
+| 1e-4, epoch 1 | 0.995 | 1.0 | 0.07491 |
+| 1e-4, epoch 2 | 0.995 | 1.0 | 0.07114 |
+| 2e-4, epoch 1 | 0.985 | 1.0 | 0.07416 |
+| **2e-4, epoch 2** | **0.995** | 1.0 | **0.07008** |
+
+- 선택: 통과율 0.995 동률 3개 중 검증 손실이 가장 낮은 **학습률 2e-4, epoch 2**(`checkpoint-376`). 선택된 설정의 검증 실패 1개(h3-2022-08-02)는 입력에 없는 숫자 '366원'이다.
+- repo로 가져올 때 두 학습률 폴더 이름이 서로 바뀌어 있었다(로컬 `r16_lr0.0001`의 log_history 최고 학습률이 2e-4, 검증 통과율이 selection.json과 엇갈림). 폴더 이름을 맞바꾼 뒤 log_history의 학습률·검증 손실과 repo 근거 검사로 다시 계산한 통과율 4개가 selection.json과 모두 일치함을 확인했다.
+- LoRA 가중치(`adapter_model.safetensors`)는 repo에 넣지 않는다(GitHub 100MB 제한, 기본안). Drive `lora/chosen/`에 두고, Colab이 계산한 sha256을 `distill/lora/chosen_hashes.json`에 남긴다. `.gitignore`에 `distill/lora/**/*.safetensors`를 넣었다.

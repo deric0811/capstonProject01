@@ -1,0 +1,7 @@
+{
+ "n_train": 2994,
+ "steps_per_epoch": 188,
+ "total_steps": 376,
+ "warmup_steps": 12,
+ "warmup_spec": 0.03
+}

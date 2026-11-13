@@ -1,0 +1,12 @@
+{
+ "note": "02 노트북 마지막 셀이 Drive lora/chosen/에서 계산한 sha256 (2026-11-13). adapter_model.safetensors는 repo에 넣지 않고 Drive에 둔다. 03의 merged_nf4/hashes.json의 adapter 항목과 맞춰 본다.",
+ "source_checkpoint": "lora/r16_lr0.0002/checkpoint-376",
+ "files": {
+  "README.md": "920cacd767e796efd22acd278dbf05603d4bc5e925640554a946faac36c3f3c8",
+  "adapter_config.json": "0d5233a336394ac63f7b912afec23d8983dfe549e7e520afbfa6222d8121d798",
+  "adapter_model.safetensors": "84d058e89f59e99178b36f720e962f8bd8769cf2d784d09d3b0fc10ee748ec0f",
+  "chat_template.jinja": "69fd8d44f998a459476b1bfb3c047c4d60faaf5dfd0d45756ebef1be8f9ca255",
+  "tokenizer.json": "1ce80c377be4ae8a4e57758da0d6ee3dc6da3f25857d72c07a52a156d7de7fab",
+  "tokenizer_config.json": "4bbc72b4b8c80d9d95fa2d236a9e060fcf7afb785d206d59758640e46ddc2e6b"
+ }
+}

@@ -4,3 +4,6 @@ __pycache__/
 .venv/
 artifacts/
 tomato_distill_bundle.tar.gz
+# LoRA 가중치는 GitHub 100MB 제한 때문에 repo에 넣지 않는다(Drive 보관, 해시는 distill/lora/chosen_hashes.json)
+distill/lora/**/*.safetensors
+distill/lora/**/checkpoint-*/
