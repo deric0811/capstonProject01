@@ -393,3 +393,4 @@
 - `lora/chosen/`에 가중치가 없어 새 확인 셀이 선택 체크포인트(`lora/r16_lr0.0002/checkpoint-376`)에서 복사했다. 크기 244.1MB, sha256 `84d058e8…`(02 출력과 같음).
 - bf16 원본 + LoRA merge → NF4 이중 양자화(계산 dtype fp16, 양자화하지 않는 가중치 fp16)로 저장. 층 수 38. A100에서 4bit 모델 전체를 GPU에 올렸을 때 `memory_allocated` 9.67GB(참고 값, 채택 기준은 데모 서버 `max_memory_reserved`).
 - `hashes.json` → `distill/merged_nf4_hashes.json`. adapter 해시 6개가 `distill/lora/chosen_hashes.json`과 모두 같다. `model.safetensors` sha256 `562e918f…`. 가중치는 Drive `merged_nf4/`에 두고 repo에는 넣지 않는다(`.gitignore`).
+- 04 SMOKE 실패와 수정 (2026-11-14): 시간 측정 뒤 `eval_smoke/student_base_timing.json`을 쓰다가 `FileNotFoundError`(폴더 없음). 본 실행의 `eval/`는 01이 만들어 두어 드러나지 않았다. 설정 셀에서 출력 폴더를 만들게 했다. 모델 로드(embedding만 CPU, fp16)와 batch 1 생성은 통과했다.

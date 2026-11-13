@@ -432,6 +432,7 @@ else:
     timing = dc.timing_subset(evals)
     E = dc.DRIVE / "eval"
     LORA_MODEL = dc.DRIVE / "merged_nf4"
+E.mkdir(parents=True, exist_ok=True)  # eval_smoke/는 처음엔 없다(시간 측정 json을 먼저 쓴다)
 print("SMOKE" if SMOKE else "본 실행", len(evals), len(timing), E)'''),
     md("## 배포 형식 그대로 로드 (NF4, embedding만 CPU), greedy, 사고 출력 끔 (skip_reasoning)\n"
        "계산 dtype은 fp16 하나로 (i)·(ii)를 평가한다(spec §6.2, 2026-11-12 확정. 데모 서버 RTX 2080 Ti는 bf16 미지원)."),
