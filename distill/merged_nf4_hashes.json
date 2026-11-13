@@ -1,0 +1,21 @@
+{
+ "source": "naver-hyperclovax/HyperCLOVAX-SEED-Think-14B",
+ "revision": "9b74e35d4c7e4ffec489f4171273caca8948a2b9",
+ "adapter": {
+  "README.md": "920cacd767e796efd22acd278dbf05603d4bc5e925640554a946faac36c3f3c8",
+  "adapter_config.json": "0d5233a336394ac63f7b912afec23d8983dfe549e7e520afbfa6222d8121d798",
+  "adapter_model.safetensors": "84d058e89f59e99178b36f720e962f8bd8769cf2d784d09d3b0fc10ee748ec0f",
+  "chat_template.jinja": "69fd8d44f998a459476b1bfb3c047c4d60faaf5dfd0d45756ebef1be8f9ca255",
+  "tokenizer.json": "1ce80c377be4ae8a4e57758da0d6ee3dc6da3f25857d72c07a52a156d7de7fab",
+  "tokenizer_config.json": "4bbc72b4b8c80d9d95fa2d236a9e060fcf7afb785d206d59758640e46ddc2e6b"
+ },
+ "smoke": false,
+ "files": {
+  "chat_template.jinja": "69fd8d44f998a459476b1bfb3c047c4d60faaf5dfd0d45756ebef1be8f9ca255",
+  "config.json": "c266731b7075a1497c8e6321f40a3b777cb808480dc9330a58fed505ba6e0cfc",
+  "generation_config.json": "0a30fcb79105ccf4cb3b198239e3ec1086ac58978f1265711baef076b80da6e3",
+  "model.safetensors": "562e918fdba9f23e93b4b63cd06ba63c1095d9c1caa72fe3aaf0f0f5cdd733bd",
+  "tokenizer.json": "1ce80c377be4ae8a4e57758da0d6ee3dc6da3f25857d72c07a52a156d7de7fab",
+  "tokenizer_config.json": "16ddabfaaacdbd8c06b70ddc903dc973a8e5206b21b555a8879ba88d89373c5f"
+ }
+}

@@ -10,7 +10,7 @@
   - Colab 묶음(sha256 `591fa13a…625a`)은 그대로다. 노트북 02·03·04는 2026-11-13에 고쳤다.
 - **Colab 02 (QLoRA) 완료** (decisions 2026-11-13 "02 본 실행 완료"): 학습률 2e-4·epoch 2 선택, 검증 통과율 0.995. `distill/lora/`에 selection·log_history·steps·val_gen과 chosen 설정 파일이 있다. 가중치는 Drive `lora/chosen/`에만 있고 해시는 `distill/lora/chosen_hashes.json`.
   - SMOKE 결과(`lora_smoke/`, `merged_nf4_smoke/`, `eval_smoke/`)는 repo로 가져오지 않는다. 03 SMOKE는 통과했다.
-- **03 (merge + NF4) 사용자 할 일**: `SMOKE = False`, A100(40GB/80GB 모두 가능, 고용량 RAM), 약 40분. `hashes.json`의 adapter 해시가 `distill/lora/chosen_hashes.json`과 같은지 확인한다. 실행 뒤 `merged_nf4/hashes.json`만 → `distill/merged_nf4_hashes.json`. 가중치 9.6GB는 Drive에 두고, 데모 서버 VRAM 측정을 위해 `merged_nf4/` 폴더를 데모 서버로 내려받는다.
+- **03 완료** (`distill/merged_nf4_hashes.json`, 가중치는 Drive `merged_nf4/`). 이전 안내:  `SMOKE = False`, A100(40GB/80GB 모두 가능, 고용량 RAM), 약 40분. `hashes.json`의 adapter 해시가 `distill/lora/chosen_hashes.json`과 같은지 확인한다. 실행 뒤 `merged_nf4/hashes.json`만 → `distill/merged_nf4_hashes.json`. 가중치 9.6GB는 Drive에 두고, 데모 서버 VRAM 측정을 위해 `merged_nf4/` 폴더를 데모 서버로 내려받는다.
 - **04 (평가 (i)·(ii)) 사용자 할 일**: A100, 약 1.5~2시간. 실행 뒤 `eval/student_base.jsonl`, `eval/student_lora.jsonl`, `eval/*_timing.json` → `distill/eval/`.
 - **04 뒤 순서**: 데모 서버 VRAM 측정(`scripts/demo_gpu_check.py --timing --model …/merged_nf4`, Docker만) → `score_distill.py`로 세 모델 채점 → 채택 판정(spec §6.3) → 사람 점검.
 - **사람 점검 60개 절차** (spec §6.3, 채택 판정에는 쓰지 않음)
@@ -34,7 +34,7 @@
 | 구현 1단계: B1(직전가)으로 end-to-end | 완료: 수집·DB·B1 예측·템플릿 설명·대시보드·Docker. §11의 1·2·3번은 Docker, 7번은 로컬에서 확인 (`docs/research/stage1-check.md`) |
 | 구현 2단계: LightGBM·backtest(3·7거래일, 매입 시뮬레이션) | 완료 (`docs/research/stage2-backtest.md`). h = 3, 7 모두 LightGBM full 선택. `train`·`predict`·대시보드 연결 완료(대시보드·설명은 3거래일) |
 | 구현 4단계: Chronos-2 zero-shot | 평가 완료 (`stage2-backtest.md`). h = 3, 7 Chronos-2 선택(LightGBM과 차이 유의하지 않음), h = 21 LightGBM 유지. 운영 모델 Chronos-2로 교체 완료(실패 시 LightGBM 대체, 외부망 차단에서도 동작) |
-| 구현 3·5단계: LLM 설명(API), LLM 증류 | 진행 중. API 해설(Gemini `gemini-3.1-flash-lite`) 연결 완료. 증류: 데모 서버 fp16 확인 통과, 프롬프트 v5 고정, Colab 01(선생 생성)·02(QLoRA) 완료, 03 본 실행 대기 |
+| 구현 3·5단계: LLM 설명(API), LLM 증류 | 진행 중. API 해설(Gemini `gemini-3.1-flash-lite`) 연결 완료. 증류: 데모 서버 fp16 확인 통과, 프롬프트 v5 고정, Colab 01(선생 생성)·02(QLoRA)·03(merge+NF4) 완료, 04 대기 |
 | 3자 비교, 소매 | 예정 (intent MVP 순서 3~4) |
 | 현장 인터뷰·가치 가설 현장 검증 | 하지 않음 (일정 부족, `docs/decisions.md` 2026-11-05). 보고서에 한계 명시 |
 
@@ -97,7 +97,7 @@
   - 남은 일정은 약 4일이다.
   - 현장 검증을 하지 않으므로 효용은 매입 시뮬레이션으로만 간접 확인한다.
 - **다음 할 일**
-  - 증류: ~~프롬프트 시험 → 데모 서버 fp16 확인 → Colab 01~~(완료) → ~~02~~(완료) → 03 → 04 → 데모 서버 VRAM 측정(`--timing`) → `score_distill.py` → 채택 판정 → 사람 점검(`human_review.py`, (i)·(ii) 가림). 위 0절 참고
+  - 증류: ~~프롬프트 시험 → 데모 서버 fp16 확인 → Colab 01~~(완료) → ~~02 → 03~~(완료) → 04 → 데모 서버 VRAM 측정(`--timing`) → `score_distill.py` → 채택 판정 → 사람 점검(`human_review.py`, (i)·(ii) 가림). 위 0절 참고
     - 확정(2026-11-12): 4bit 형식 NF4 + embedding CPU, 계산 dtype fp16. 채택 = 통과율 ≥ 90% 그리고 데모 서버 VRAM ≤ 10GB. 미달이면 API(BYOK) → 템플릿
   - 데모 서버(~~RTX 3080 10GB~~ RTX 2080 Ti 22GB 개조, 2026-11-12 정정): Docker GPU 지원과 fp16 확인 완료(2026-11-13)
   - 범위 제외: 해설 꼬리질문(대화형). 향후 과제

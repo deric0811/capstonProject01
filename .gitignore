@@ -7,3 +7,5 @@ tomato_distill_bundle.tar.gz
 # LoRA 가중치는 GitHub 100MB 제한 때문에 repo에 넣지 않는다(Drive 보관, 해시는 distill/lora/chosen_hashes.json)
 distill/lora/**/*.safetensors
 distill/lora/**/checkpoint-*/
+# merge 후 4bit 모델(약 9.6GB)은 repo에 넣지 않는다(Drive·데모 서버 보관, 해시는 distill/merged_nf4_hashes.json)
+distill/merged_nf4/
