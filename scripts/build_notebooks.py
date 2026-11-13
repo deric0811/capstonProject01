@@ -363,6 +363,23 @@ OUT = dc.DRIVE / ("merged_nf4_smoke" if SMOKE else "merged_nf4")
 LOCAL = "/content/merged_bf16_smoke" if SMOKE else "/content/merged_bf16"
 LAYERS = {"num_hidden_layers": 2} if SMOKE else {}  # SMOKE만: 앞 2개 층만 올린다
 print("SMOKE" if SMOKE else "본 실행", ADAPTER, "→", OUT)'''),
+    md("## 어댑터 가중치 확인 (본 실행): 02가 출력한 sha256과 같아야 한다\n"
+       "`lora/chosen/`에 가중치가 없으면 selection.json의 선택 체크포인트에서 복사하고, 해시가 같을 때만 진행한다."),
+    code(r'''from pathlib import Path
+EXPECTED_ADAPTER_SHA256 = "84d058e89f59e99178b36f720e962f8bd8769cf2d784d09d3b0fc10ee748ec0f"  # repo distill/lora/chosen_hashes.json
+W = ADAPTER / "adapter_model.safetensors"
+if not SMOKE:
+    print("chosen 폴더:", sorted(p.name for p in ADAPTER.iterdir()))
+    if not W.exists():
+        sel = json.loads((dc.DRIVE / "lora" / "selection.json").read_text())
+        src = Path(sel["chosen"]["checkpoint"]) / "adapter_model.safetensors"
+        print("chosen에 가중치가 없다 →", src, "있음" if src.exists() else "없음")
+        assert src.exists(), "선택 체크포인트에도 가중치가 없다. Drive 휴지통을 확인하고 멈춘다"
+        assert dc.sha256(src) == EXPECTED_ADAPTER_SHA256, "체크포인트 가중치의 해시가 02 출력과 다르다. 멈춘다"
+        shutil.copy2(src, W)
+    got = dc.sha256(W)
+    print(W, round(W.stat().st_size / 1e6, 1), "MB", got)
+    assert got == EXPECTED_ADAPTER_SHA256, "어댑터 해시가 02 출력과 다르다. 멈춘다"'''),
     code(r'''# 1) bf16 원본에 LoRA merge → 로컬 디스크에 저장
 if not (OUT / "hashes.json").exists():
     base = AutoModelForCausalLM.from_pretrained(dc.STUDENT_ID, revision=dc.STUDENT_REV, dtype=torch.bfloat16, device_map={"": 0}, **LAYERS)

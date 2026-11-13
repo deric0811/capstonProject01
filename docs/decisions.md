@@ -386,3 +386,5 @@
 - 선택: 통과율 0.995 동률 3개 중 검증 손실이 가장 낮은 **학습률 2e-4, epoch 2**(`checkpoint-376`). 선택된 설정의 검증 실패 1개(h3-2022-08-02)는 입력에 없는 숫자 '366원'이다.
 - repo로 가져올 때 두 학습률 폴더 이름이 서로 바뀌어 있었다(로컬 `r16_lr0.0001`의 log_history 최고 학습률이 2e-4, 검증 통과율이 selection.json과 엇갈림). 폴더 이름을 맞바꾼 뒤 log_history의 학습률·검증 손실과 repo 근거 검사로 다시 계산한 통과율 4개가 selection.json과 모두 일치함을 확인했다.
 - LoRA 가중치(`adapter_model.safetensors`)는 repo에 넣지 않는다(GitHub 100MB 제한, 기본안). Drive `lora/chosen/`에 두고, Colab이 계산한 sha256을 `distill/lora/chosen_hashes.json`에 남긴다. `.gitignore`에 `distill/lora/**/*.safetensors`를 넣었다.
+- 03 본 실행 실패 (2026-11-13): `PeftModel.from_pretrained(…/lora/chosen)`이 `HFValidationError: Repo id must be in the form …`로 멈췄다. peft는 폴더에 `adapter_model.safetensors`가 없으면 경로를 Hub 저장소 이름으로 보고 다시 찾는다. 즉 03 실행 시점에 Drive `lora/chosen/`에 가중치 파일이 없었다. 02 마지막 셀은 같은 파일의 해시(`84d058e8…`)를 출력했으므로 02 런타임 안에서는 있었다. Drive 업로드가 끝나기 전에 런타임이 끝났거나 파일이 옮겨·지워졌을 가능성이 있다(원인 미확인). repo로 받은 chosen에도 이 파일이 없었다.
+  - 수정: 03에 어댑터 확인 셀을 넣었다. chosen에 가중치가 없으면 selection.json의 선택 체크포인트(`lora/r16_lr0.0002/checkpoint-376`)에서 복사하고, 두 경우 모두 sha256이 02 출력과 같을 때만 진행한다. 체크포인트에도 없으면 멈춘다.
