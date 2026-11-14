@@ -383,7 +383,7 @@
 | 2e-4, epoch 1 | 0.985 | 1.0 | 0.07416 |
 | **2e-4, epoch 2** | **0.995** | 1.0 | **0.07008** |
 
-- 선택: 통과율 0.995 동률 3개 중 검증 손실이 가장 낮은 **학습률 2e-4, epoch 2**(`checkpoint-376`). 선택된 설정의 검증 실패 1개(h3-2022-08-02)는 입력에 없는 숫자 '366원'이다.
+- 선택: 통과율 0.995 동률 3개 중 검증 손실이 가장 낮은 **학습률 2e-4, epoch 2**(`checkpoint-376`). 선택된 설정의 검증 실패 1개는 h3-2022-08-01(입력에 없는 숫자 '21,460원')이다. (2026-11-14 정정: 처음에 h3-2022-08-02 '366원'으로 적었으나 폴더 이름을 바로잡기 전의 값이었다. 실패 목록: 1e-4 ep1·ep2 h3-2022-08-02 '366원', 2e-4 ep1 h3-2022-07-29 '21,060원'·h3-2022-08-01 '21,460원'·h3-2022-08-02 '366원', 2e-4 ep2 h3-2022-08-01 '21,460원'.)
 - repo로 가져올 때 두 학습률 폴더 이름이 서로 바뀌어 있었다(로컬 `r16_lr0.0001`의 log_history 최고 학습률이 2e-4, 검증 통과율이 selection.json과 엇갈림). 폴더 이름을 맞바꾼 뒤 log_history의 학습률·검증 손실과 repo 근거 검사로 다시 계산한 통과율 4개가 selection.json과 모두 일치함을 확인했다.
 - LoRA 가중치(`adapter_model.safetensors`)는 repo에 넣지 않는다(GitHub 100MB 제한, 기본안). Drive `lora/chosen/`에 두고, Colab이 계산한 sha256을 `distill/lora/chosen_hashes.json`에 남긴다. `.gitignore`에 `distill/lora/**/*.safetensors`를 넣었다.
 - 03 본 실행 실패 (2026-11-13): `PeftModel.from_pretrained(…/lora/chosen)`이 `HFValidationError: Repo id must be in the form …`로 멈췄다. peft는 폴더에 `adapter_model.safetensors`가 없으면 경로를 Hub 저장소 이름으로 보고 다시 찾는다. 즉 03 실행 시점에 Drive `lora/chosen/`에 가중치 파일이 없었다. 02 마지막 셀은 같은 파일의 해시(`84d058e8…`)를 출력했으므로 02 런타임 안에서는 있었다. Drive 업로드가 끝나기 전에 런타임이 끝났거나 파일이 옮겨·지워졌을 가능성이 있다(원인 미확인). repo로 받은 chosen에도 이 파일이 없었다.
@@ -394,3 +394,11 @@
 - bf16 원본 + LoRA merge → NF4 이중 양자화(계산 dtype fp16, 양자화하지 않는 가중치 fp16)로 저장. 층 수 38. A100에서 4bit 모델 전체를 GPU에 올렸을 때 `memory_allocated` 9.67GB(참고 값, 채택 기준은 데모 서버 `max_memory_reserved`).
 - `hashes.json` → `distill/merged_nf4_hashes.json`. adapter 해시 6개가 `distill/lora/chosen_hashes.json`과 모두 같다. `model.safetensors` sha256 `562e918f…`. 가중치는 Drive `merged_nf4/`에 두고 repo에는 넣지 않는다(`.gitignore`).
 - 04 SMOKE 실패와 수정 (2026-11-14): 시간 측정 뒤 `eval_smoke/student_base_timing.json`을 쓰다가 `FileNotFoundError`(폴더 없음). 본 실행의 `eval/`는 01이 만들어 두어 드러나지 않았다. 설정 셀에서 출력 폴더를 만들게 했다. 모델 로드(embedding만 CPU, fp16)와 batch 1 생성은 통과했다.
+
+## 2026-11-14: Colab 04 본 실행 완료 (평가 입력 1회 사용, 노트북 출력 기록)
+- 출처: 사용자가 붙여 넣은 Colab 04 출력. 결과 파일(`eval/student_base.jsonl`, `student_lora.jsonl`, `*_timing.json`)은 아직 repo에 없다. 공식 채점(`score_distill.py`, 규칙별 통과율·형식·짝 비교)은 파일을 가져온 뒤 한다.
+- 조건: A100 80GB, transformers 5.22.2 등 고정 버전, 배포 형식(NF4, embedding만 CPU, 계산 dtype fp16, 두 모델 모두 출력으로 확인), greedy, batch 16, 프롬프트 v5. 약 3시간.
+- 시간 측정(평가 입력 50개, batch 1, A100): (i) 학생 원본 평균 75.43초, max_memory_reserved 11.23GB. (ii) LoRA 학생 72.59초, 11.02GB. (iii) 선생은 01에서 vLLM 7.12초(메모리는 비교하지 않음).
+- 노트북의 빠른 통과율(근거 검사 pass, 분모 934): (i) 0.408, (ii) 0.998, (iii) 0.995.
+- 채택 기준 1((ii) 통과율 ≥ 90%)은 이 값으로는 충족. 기준 2(데모 서버 VRAM ≤ 10GB)는 아직 재지 않았다. A100 대리 값은 11.02GB다.
+- 확인할 점: (ii)의 batch 1 생성 시간이 원본과 비슷하다(02 검증 생성은 bf16·전체 GPU에서 16개 batch 약 33초, 04는 약 78초). 배포 형식의 속도 때문인지, 끝난 뒤에도 512토큰까지 생성하기 때문인지는 timing 파일의 `new_tokens`로 확인한다(미확인).
