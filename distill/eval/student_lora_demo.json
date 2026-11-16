@@ -1,0 +1,285 @@
+{
+ "mean_sec": 43.57,
+ "n": 50,
+ "max_reserved_gb": 11.02,
+ "max_allocated_gb": 9.87,
+ "gpu": "NVIDIA GeForce RTX 2080 Ti",
+ "rows": [
+  {
+   "id": "h3-2023-01-26",
+   "sec": 43.39,
+   "new_tokens": 174
+  },
+  {
+   "id": "h3-2023-02-08",
+   "sec": 44.88,
+   "new_tokens": 181
+  },
+  {
+   "id": "h3-2023-03-17",
+   "sec": 44.46,
+   "new_tokens": 179
+  },
+  {
+   "id": "h3-2023-05-18",
+   "sec": 44.46,
+   "new_tokens": 179
+  },
+  {
+   "id": "h3-2023-06-15",
+   "sec": 44.43,
+   "new_tokens": 179
+  },
+  {
+   "id": "h3-2023-06-26",
+   "sec": 43.24,
+   "new_tokens": 174
+  },
+  {
+   "id": "h3-2023-06-30",
+   "sec": 38.94,
+   "new_tokens": 156
+  },
+  {
+   "id": "h3-2023-09-21",
+   "sec": 44.42,
+   "new_tokens": 179
+  },
+  {
+   "id": "h3-2023-10-16",
+   "sec": 44.91,
+   "new_tokens": 181
+  },
+  {
+   "id": "h3-2023-11-08",
+   "sec": 44.89,
+   "new_tokens": 181
+  },
+  {
+   "id": "h3-2023-11-10",
+   "sec": 44.4,
+   "new_tokens": 179
+  },
+  {
+   "id": "h3-2023-11-15",
+   "sec": 44.42,
+   "new_tokens": 179
+  },
+  {
+   "id": "h3-2023-12-18",
+   "sec": 43.22,
+   "new_tokens": 174
+  },
+  {
+   "id": "h3-2024-01-05",
+   "sec": 40.37,
+   "new_tokens": 162
+  },
+  {
+   "id": "h3-2024-01-15",
+   "sec": 43.22,
+   "new_tokens": 174
+  },
+  {
+   "id": "h3-2024-03-25",
+   "sec": 44.67,
+   "new_tokens": 180
+  },
+  {
+   "id": "h3-2024-04-05",
+   "sec": 44.46,
+   "new_tokens": 179
+  },
+  {
+   "id": "h3-2024-05-14",
+   "sec": 43.23,
+   "new_tokens": 174
+  },
+  {
+   "id": "h3-2024-06-04",
+   "sec": 42.05,
+   "new_tokens": 169
+  },
+  {
+   "id": "h3-2024-06-24",
+   "sec": 42.75,
+   "new_tokens": 172
+  },
+  {
+   "id": "h3-2024-07-25",
+   "sec": 43.7,
+   "new_tokens": 176
+  },
+  {
+   "id": "h3-2024-08-02",
+   "sec": 43.7,
+   "new_tokens": 176
+  },
+  {
+   "id": "h3-2024-09-20",
+   "sec": 43.93,
+   "new_tokens": 177
+  },
+  {
+   "id": "h3-2024-10-22",
+   "sec": 43.93,
+   "new_tokens": 177
+  },
+  {
+   "id": "h3-2024-10-28",
+   "sec": 43.93,
+   "new_tokens": 177
+  },
+  {
+   "id": "h3-2024-10-30",
+   "sec": 44.89,
+   "new_tokens": 181
+  },
+  {
+   "id": "h3-2024-12-24",
+   "sec": 42.76,
+   "new_tokens": 172
+  },
+  {
+   "id": "h3-2025-01-23",
+   "sec": 42.53,
+   "new_tokens": 171
+  },
+  {
+   "id": "h3-2025-02-14",
+   "sec": 44.43,
+   "new_tokens": 179
+  },
+  {
+   "id": "h3-2025-03-10",
+   "sec": 43.24,
+   "new_tokens": 174
+  },
+  {
+   "id": "h3-2025-03-20",
+   "sec": 43.24,
+   "new_tokens": 174
+  },
+  {
+   "id": "h3-2025-04-08",
+   "sec": 43.25,
+   "new_tokens": 174
+  },
+  {
+   "id": "h3-2025-04-10",
+   "sec": 44.45,
+   "new_tokens": 179
+  },
+  {
+   "id": "h3-2025-07-15",
+   "sec": 44.44,
+   "new_tokens": 179
+  },
+  {
+   "id": "h3-2025-08-11",
+   "sec": 43.46,
+   "new_tokens": 175
+  },
+  {
+   "id": "h3-2025-10-27",
+   "sec": 43.24,
+   "new_tokens": 174
+  },
+  {
+   "id": "h3-2025-11-20",
+   "sec": 43.95,
+   "new_tokens": 177
+  },
+  {
+   "id": "h3-2026-01-23",
+   "sec": 42.29,
+   "new_tokens": 170
+  },
+  {
+   "id": "h3-2026-01-29",
+   "sec": 44.9,
+   "new_tokens": 181
+  },
+  {
+   "id": "h3-2026-03-13",
+   "sec": 39.43,
+   "new_tokens": 158
+  },
+  {
+   "id": "h3-2026-04-24",
+   "sec": 44.42,
+   "new_tokens": 179
+  },
+  {
+   "id": "h3-2026-04-30",
+   "sec": 44.41,
+   "new_tokens": 179
+  },
+  {
+   "id": "h3-2026-06-11",
+   "sec": 44.42,
+   "new_tokens": 179
+  },
+  {
+   "id": "h3-2026-07-10",
+   "sec": 44.66,
+   "new_tokens": 180
+  },
+  {
+   "id": "h3-2026-07-27",
+   "sec": 43.22,
+   "new_tokens": 174
+  },
+  {
+   "id": "h3-2026-08-13",
+   "sec": 43.47,
+   "new_tokens": 175
+  },
+  {
+   "id": "h3-2026-08-14",
+   "sec": 43.21,
+   "new_tokens": 174
+  },
+  {
+   "id": "h3-2026-09-17",
+   "sec": 43.23,
+   "new_tokens": 174
+  },
+  {
+   "id": "h3-2026-09-18",
+   "sec": 44.65,
+   "new_tokens": 180
+  },
+  {
+   "id": "h3-2026-10-29",
+   "sec": 42.51,
+   "new_tokens": 171
+  }
+ ],
+ "model": "student_lora",
+ "path": "/models/merged_nf4",
+ "compute_dtype": "fp16",
+ "where": "demo_server",
+ "nvidia_smi_used_gb": 11.21,
+ "prompt_version": "v5",
+ "env": {
+  "torch": "2.10.0+cu128",
+  "cuda_runtime": "12.8",
+  "cuda_available": true,
+  "transformers": "5.22.2",
+  "bitsandbytes": "0.50.2",
+  "accelerate": "1.15.0",
+  "arch_list": [
+   "sm_70",
+   "sm_75",
+   "sm_80",
+   "sm_86",
+   "sm_90",
+   "sm_100",
+   "sm_120"
+  ],
+  "gpu": "NVIDIA GeForce RTX 2080 Ti",
+  "capability": "7.5",
+  "total_gb": 23.07
+ }
+}

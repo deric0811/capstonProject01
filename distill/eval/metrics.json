@@ -1,0 +1,75 @@
+{
+ "summary": {
+  "student_base": {
+   "n": 934,
+   "missing": 0,
+   "pass": 0.4079,
+   "a": 0.4615,
+   "a_numbers": 0.4615,
+   "a_median": 0.985,
+   "b": 1.0,
+   "c": 0.561,
+   "c_caution": 1.0,
+   "format": 0.7719,
+   "perf_caution": 0.0236,
+   "mean_sec": 75.43,
+   "max_reserved_gb": 11.23,
+   "max_allocated_gb": 9.91,
+   "nvidia_smi_used_gb": null,
+   "gpu": "NVIDIA A100-SXM4-80GB"
+  },
+  "student_lora": {
+   "n": 934,
+   "missing": 0,
+   "pass": 0.9979,
+   "a": 0.9979,
+   "a_numbers": 0.9979,
+   "a_median": 1.0,
+   "b": 1.0,
+   "c": 1.0,
+   "c_caution": 1.0,
+   "format": 1.0,
+   "perf_caution": 0.0,
+   "mean_sec": 72.59,
+   "max_reserved_gb": 11.02,
+   "max_allocated_gb": 9.87,
+   "nvidia_smi_used_gb": null,
+   "gpu": "NVIDIA A100-SXM4-80GB"
+  },
+  "teacher": {
+   "n": 934,
+   "missing": 0,
+   "pass": 0.9946,
+   "a": 0.9957,
+   "a_numbers": 0.9957,
+   "a_median": 1.0,
+   "b": 1.0,
+   "c": 0.9989,
+   "c_caution": 1.0,
+   "format": 1.0,
+   "perf_caution": 0.0,
+   "mean_sec": 7.12,
+   "max_reserved_gb": null,
+   "max_allocated_gb": null,
+   "nvidia_smi_used_gb": 74.15,
+   "gpu": "NVIDIA A100-SXM4-80GB"
+  }
+ },
+ "paired_pass": {
+  "both": 380,
+  "only_base": 1,
+  "only_lora": 552,
+  "neither": 1
+ },
+ "decision": {
+  "adopt_student": false,
+  "student_lora_pass": 0.9979,
+  "threshold": 0.9,
+  "pass_ok": true,
+  "demo_vram_gb": 11.02,
+  "vram_limit_gb": 10.0,
+  "vram_ok": false,
+  "explain": "api_or_template",
+  "distill_effect_pts": 59.0
+ }
+}
