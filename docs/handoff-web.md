@@ -68,7 +68,7 @@
 - 사전 등록 기준(spec §6.3): (ii) 통과율 ≥ 90% **그리고** 데모 서버에서 (ii) max_memory_reserved ≤ 10GB(10 × 10⁹ 바이트).
   - 기준 1: 충족(공식 0.998).
   - 기준 2: 미달(데모 서버 11.02GB > 10GB).
-  - 판정: **미채택**. 운영은 사전 등록 규칙대로 API(BYOK) → 템플릿.
+  - 판정: **미채택**. 사전 등록 규칙상 운영은 API(BYOK) → 템플릿이지만, 실제로는 explain·대시보드는 템플릿만 동작한다. LLM(API·학생) 해설은 평가에서만 썼고, 해설 경로 연결은 미구현이다(5절).
 - 사후 판단(결과를 본 뒤, 사용자 판단, 판정은 바꾸지 않음): 10GB는 RTX 3080을 막연히 가정한 값이었고 서버가 22GB로 바뀐 뒤 다시 따지지 않았다. 다시 잡는다면 16GB급이다. 실질적인 이유는 VRAM이 아니다. 원인 정보(뉴스 등)가 입력에 없어 해설이 템플릿과 거의 같고, 점검한 (ii) 출력 30개 중 2개에 사실 오류가 있었다. 이 지적은 같은 프롬프트를 쓰는 API 해설에도 해당한다. 학생은 시연용으로 두고 explain에는 연결하지 않았다.
 
 ### 2.5 사람 점검 60개
@@ -108,19 +108,19 @@
 6. (해결) (ii) 생성이 느린 이유: 512토큰까지 생성하지 않음(최대 181). 배포 형식의 토큰당 속도 때문.
 7. (해결) VRAM 기준 2: 데모 서버 11.02GB로 미달.
 10. 근거 검사는 숫자가 입력에 있는지만 본다. 입력의 다른 항목 숫자를 엉뚱한 자리에 쓰면(R41) 통과한다. API 해설에도 같은 한계(기록만, 검사기 변경 없음).
-11. `LLM_PROVIDER=auto`는 local(localhost:8081)이 응답하면 학생을 먼저 쓴다. 데모 서버에서 학생 서버를 띄운 채 auto로 두면 미채택 학생이 explain에 쓰인다. 학생 시연은 explain과 따로 할 것.
+11. 해설 경로 연결 미구현: `tomato explain`·대시보드는 `explain/llm.py`를 부르지 않는다(템플릿만). `LLM_PROVIDER`는 지금 아무 효과가 없다. 나중에 연결한다면 auto는 local(localhost:8081)이 응답하면 학생을 먼저 쓰므로, 학생 서버를 띄운 채 auto로 두면 미채택 학생이 쓰인다.
 8. `distill_common.load_student`의 docstring("계산 dtype을 덮어쓴다")은 4bit로 저장된 모델에서는 부정확하다(저장된 설정이 쓰임). 03이 fp16으로 저장해 결과는 같다. 묶음을 바꾸지 않으려고 코드는 그대로 둠.
 9. `deploy/crontab.example`의 주석은 "LightGBM 예측"이라고 되어 있으나 `predict` 기본은 Chronos-2(실패 시 LightGBM)다. 주석만 옛 내용.
 
 ## 5. 현재 운영 상태
-- explain: 학생 미채택(2026-11-17) → 사전 등록 규칙대로 API(BYOK, Gemini `gemini-3.1-flash-lite`, 키는 `.env`의 `GEMINI_API_KEY`) → 템플릿. 이 랩탑 `.env`에 `LLM_PROVIDER=auto`를 넣는다(2026-11-17). local 서버가 없으면 auto는 API를 쓰고, 키가 없으면 템플릿. 근거 검사에 실패한 문장은 템플릿으로 대체한다.
+- explain: **템플릿만 동작**. explain·대시보드는 템플릿만 동작한다. LLM(API·학생) 해설은 평가에서만 썼고, 해설 경로 연결은 미구현이다. `explain/llm.py`(API: Gemini `gemini-3.1-flash-lite`, 키는 `.env`의 `GEMINI_API_KEY` / local: 학생 서버)와 설정은 있지만, 이를 부르는 곳은 `scripts/prompt_trial.py`와 테스트뿐이다. `.env`에 `LLM_PROVIDER` 줄은 없다. 학생은 미채택(2026-11-17).
 - 예측: `predict` 기본은 h = 3·7 Chronos-2, 실패 시 LightGBM(2026-11-10).
 - cron: 이 랩탑의 crontab에는 tomato 작업이 없다(다른 줄 1개만 있음). 데모 서버의 cron 등록 여부는 미확인. 예시는 `deploy/crontab.example`.
 - 데모 환경: Docker compose(app + PostgreSQL)로 수집·예측·설명·대시보드가 동작함을 1단계에서 확인(`docs/research/stage1-check.md`). 데모 서버(RTX 2080 Ti 22GB)에서는 GPU 확인용 Docker 이미지(`deploy/demo-gpu`)만 돌렸다. 대시보드를 데모 서버에 올렸는지는 미확인.
 
 ## 6. 남은 일과 순서 (마감 2026-11-17경)
 1. ~~04 결과 반입·공식 채점~~, ~~데모 서버 VRAM~~, ~~사람 점검~~, ~~채택 판정(미채택)~~: 2026-11-17 완료.
-2. 데모 서버 explain 설정(auto면 학생 서버를 띄우지 않을 것, 위 4절 11). 상태: 미확인.
+2. 해설 경로 연결(`cmd_explain` → `llm.resolve()` → 근거 검사 → 실패 시 템플릿): 미구현. 할지 여부 미정.
 3. 학생 시연(선택): explain과 분리해 시연. 상태: 미정.
 4. KREI 비교(intent 산출물 6 "3자 비교"): 기록상 KREI 관측월보가 유일한 후보지만 토마토 포함 여부와 전망 형식은 확인하지 못함(`docs/research/data-sources.md`). spec은 3자 비교를 범위 밖으로 두었다. 상태: 미착수.
 5. 보고서: repo에 보고서 파일 없음. 상태: 미착수(기록 기준). 넣을 한계: 현장 검증 미실시, epoch 1 체크포인트, "동일" 입력, 테스트 구간 사용 횟수 등.

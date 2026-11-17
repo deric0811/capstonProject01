@@ -425,6 +425,7 @@
 ### 사전 등록 판정
 - 기준 1 충족((ii) 통과율 99.8% ≥ 90%), 기준 2 미달(데모 서버 max_reserved 11.02GB > 10GB) → **미채택**(`metrics.json`의 decision: `adopt_student: false`, `explain: api_or_template`).
 - 운영은 사전 등록 규칙대로 API(BYOK) → 템플릿.
+- 정정(같은 날 확인): 실제로는 explain·대시보드는 템플릿만 동작한다. LLM(API·학생) 해설은 평가에서만 썼고, 해설 경로 연결은 미구현이다. `tomato explain`(`cli.py` `cmd_explain`)은 `template.render`만 부르고, `explain/llm.py`(`resolve`·`chat`)를 부르는 곳은 `scripts/prompt_trial.py`와 테스트뿐이다. 따라서 위 규칙의 "API(BYOK)" 단계는 아직 동작하지 않고, 운영 해설은 템플릿이다. `.env`는 바꾸지 않았다(`LLM_PROVIDER` 없음).
 
 ### 사후 판단 (결과를 본 뒤, 사용자 판단. 사전 등록 판정을 바꾸지 않는다)
 - 10GB는 RTX 3080을 막연히 가정한 값이었고, 데모 서버가 22GB(RTX 2080 Ti 개조)로 바뀐 뒤 다시 따지지 않았다. 다시 잡는다면 16GB급이다.
